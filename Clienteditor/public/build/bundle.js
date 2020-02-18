@@ -25466,7 +25466,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       },
     ]);
     function updateData() {
-      fetch('//localhost:3000/allData', {
+      fetch('http://server.rajat.local/allData', {
         method: 'GET',
       })
         .then(res => {
@@ -25500,7 +25500,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         test_output: '[]',
         solution: 'function solution() { return 1; }',
       };
-      fetch('//localhost:3000/addNewProblem', {
+      fetch('http://server.rajat.local/addNewProblem', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -25523,7 +25523,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function newProblemData(id, newData) {
-      fetch('//localhost:3000/problem/' + id, {
+      fetch('http://server.rajat.local/problem/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -25547,7 +25547,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateSolution(id, solution) {
-      fetch('//localhost:3000/updateSolution/' + id, {
+      fetch('http://server.rajat.local/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -25567,7 +25567,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateTestInput(id, value) {
-      fetch('//localhost:3000/updateSolution/' + id, {
+      fetch('http://server.rajat.local/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -25587,7 +25587,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateTestOutput(id, value) {
-      fetch('//localhost:3000/updateSolution/' + id, {
+      fetch('http://server.rajat.local/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -25618,7 +25618,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function deleteTab(id) {
-      fetch('//localhost:3000/problem/' + id, {
+      fetch('http://server.rajat.local/problem/' + id, {
         method: 'DELETE',
       }).then(res => {
         return update$1(tabs => {
@@ -26229,7 +26229,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			h1 = element("h1");
     			t = text(t_value);
     			attr_dev(h1, "class", "question px-3 py-3 svelte-o9pd4q");
-    			add_location(h1, file$4, 81, 4, 1550);
+    			add_location(h1, file$4, 81, 4, 1554);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -26351,21 +26351,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div0, "class", "w-full bg-gray-800 cursor-move text-bg-600 flex justify-center\n    text-3xl h-3");
     			set_style(div0, "line-height", "1px");
     			set_style(div0, "cursor", "ns-resize");
-    			add_location(div0, file$4, 84, 2, 1637);
+    			add_location(div0, file$4, 84, 2, 1641);
     			attr_dev(button, "class", "runButton svelte-o9pd4q");
-    			add_location(button, file$4, 92, 4, 1908);
+    			add_location(button, file$4, 92, 4, 1912);
     			attr_dev(h2, "class", "text-3xl text-center title svelte-o9pd4q");
-    			add_location(h2, file$4, 93, 4, 1979);
+    			add_location(h2, file$4, 93, 4, 1983);
     			attr_dev(div1, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-o9pd4q");
-    			add_location(div1, file$4, 94, 4, 2034);
+    			add_location(div1, file$4, 94, 4, 2038);
     			attr_dev(div2, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-o9pd4q");
-    			add_location(div2, file$4, 97, 4, 2137);
+    			add_location(div2, file$4, 97, 4, 2141);
     			attr_dev(div3, "class", "output svelte-o9pd4q");
     			attr_dev(div3, "id", "outputid");
     			set_style(div3, "height", /*height*/ ctx[3]);
-    			add_location(div3, file$4, 91, 2, 1845);
+    			add_location(div3, file$4, 91, 2, 1849);
     			attr_dev(div4, "class", "mainDiv flex flex-col svelte-o9pd4q");
-    			add_location(div4, file$4, 68, 0, 1240);
+    			add_location(div4, file$4, 68, 0, 1244);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -26469,7 +26469,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dragging = false;
 
     	function runHandler() {
-    		fetch("http://localhost:3000/result/" + $currentTab.id, { method: "GET" }).then(res => {
+    		fetch("http://server.rajat.local/result/" + $currentTab.id, { method: "GET" }).then(res => {
     			return res.json();
     		}).then(data => {
     			$$invalidate(0, outputData = data.output);

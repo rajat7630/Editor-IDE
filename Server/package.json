@@ -12,11 +12,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "apollo": "^2.22.1",
+    "apollo-datasource-rest": "^0.7.0",
+    "apollo-server": "^2.10.0",
     "body-parser": "^1.19.0",
     "concurrently": "^5.1.0",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "nodemon": "^2.0.2",
+    "pg": "^7.18.1",
     "redbird": "^0.10.0"
   }
 }

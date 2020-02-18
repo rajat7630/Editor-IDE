@@ -4,42 +4,42 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(bodyParser());
-const proxy = require('redbird')({
-  port: 80,
-  xfwd: true,
-  letsencrypt: {
-    path: __dirname + '/certs',
-    port: 9999,
-  },
-  ssl: {
-    http2: true,
-    port: 443,
-  },
-});
 
-let connectionInfo = {
-  ssl: {
-    letsencrypt: {
-      email: 'rajat.garg@sourcefuse.com',
-      production: false,
-    },
-  },
-};
+//setting up of database
+const Store = require("./store.js");
+Store.client.query('SELECT NOW()', (err, res) => {
+  if(err)
+  {
+    console.log(err);
+  }
+  else
+  console.log(res.rows[0], "hellllooooooooo");
+});
+// Setting up of apollo server
+const { ApolloServer } = require('apollo-server');
+const typeDefs = require('./schema.js');
+const resolvers = require('./resolver.js');
+const apolloServer = new ApolloServer({
+  typeDefs,
+  resolvers
+});
+apolloServer.listen();
+
 let data = [
   {
     id: 61167925,
     problem: 'Write a program to find sum a array of integers',
     test_case: '[1, 2, 3, 4, 5]',
     test_output: '[15]',
-    solution: 'function solution() { return 0; }',
+    solution: 'function solution() { return 0; }'
   },
   {
     id: 92035553,
     problem: 'Write  program to find product of given numbers',
     test_case: '[1, 2, 3]',
     test_output: '[6]',
-    solution: 'function solution() { return 1; }',
-  },
+    solution: 'function solution() { return 1; }'
+  }
 ];
 
 app.get('/', (req, res) => {
@@ -47,7 +47,7 @@ app.get('/', (req, res) => {
 });
 app.get('/allData', (req, res) => {
   res.send({
-    data: data,
+    data: data
   });
 });
 
@@ -57,20 +57,20 @@ app.post('/addNewProblem', (req, res) => {
 });
 
 app.post('/updateSolution/:id', (req, res) => {
-  data = data.map(problem => {
+  data = data.map((problem) => {
     if (problem.id == req.params.id) {
       return { ...problem, ...req.body };
     }
     return problem;
   });
   res.send({
-    status: 200,
+    status: 200
   });
 });
 
 app.get('/result/:id', (req, res) => {
   let problem;
-  data.forEach(prob => {
+  data.forEach((prob) => {
     if (prob.id == req.params.id) {
       problem = prob;
       return true;
@@ -80,8 +80,8 @@ app.get('/result/:id', (req, res) => {
   try {
     outputData = eval(
       `${problem.solution} solution(${JSON.stringify(
-        JSON.parse(problem.test_case),
-      )})`,
+        JSON.parse(problem.test_case)
+      )})`
     );
     outputCheck =
       JSON.stringify(outputData) ===
@@ -95,19 +95,19 @@ app.get('/result/:id', (req, res) => {
 
   res.send({
     answer: outputCheck,
-    output: outputData,
+    output: outputData
   });
 });
 
 app.post('/problem/:id', (req, res) => {
-  data = data.map(problem => {
+  data = data.map((problem) => {
     if (problem.id == req.params.id) {
       return { ...problem, ...req.body };
     }
     return problem;
   });
   res.send({
-    status: 200,
+    status: 200
   });
 });
 
@@ -120,7 +120,7 @@ app.delete('/problem/:id', (req, res) => {
   });
   res.send({
     status: 200,
-    message: 'deleted',
+    message: 'deleted'
   });
 });
 
