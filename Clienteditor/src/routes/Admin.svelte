@@ -17,6 +17,9 @@
         margin-left: 10%;
 			  margin-right: 6%;
     }
+    #btn{
+    float: right;
+    }
 </style>
 
 <nav class="flex items-center justify-between flex-wrap bg-teal-500 p-6">
