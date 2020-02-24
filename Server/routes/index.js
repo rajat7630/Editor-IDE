@@ -1,6 +1,7 @@
 var express = require("express");
 var router = express.Router();
 var passport = require("passport");
+const redis = require('redis');
 
 /* GET home page. */
 router.get("/", function(req, res, next) {
@@ -21,5 +22,10 @@ router.get(
 		res.redirect("http://localhost:5555/admin?token=" + token);
 	}
 );
+
+router.get('/logout', function(req, res){
+    req.logout();
+    res.redirect('http://localhost:5555');
+  });
 
 module.exports = router;
