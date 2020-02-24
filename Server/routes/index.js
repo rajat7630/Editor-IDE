@@ -32,7 +32,9 @@ router.get(
 	passport.authenticate("google", { failureRedirect: "/", session: false }),
 	function(req, res) {
         var token = req.user.token;
-        console.log(token);
+        var email = req.user.email;
+        var user = req.user.id;
+        console.log(email);
 
         const jwt_secret = "secret";
         const jwt_expiration = 60*10;
@@ -41,10 +43,10 @@ router.get(
         //let refresh_token = generate_refresh_token(64);
        // let refresh_token_maxage = new Date() + jwt_refresh_expiration;
       
-        let token1 = jwt.sign({ uid: token }, jwt_secret, {
+        let token1 = jwt.sign({ uid: email }, jwt_secret, {
               expiresIn: jwt_expiration
           });
-        console.log(token1);
+        //console.log(token1);
       
         client.set(token1, JSON.stringify({
           expires: jwt_expiration
@@ -52,7 +54,7 @@ router.get(
         redis.print
         );
 
-		res.redirect("http://localhost:5555/admin?token=" + token);
+		res.redirect("http://localhost:5555/admin?token=" + token1);
 	}
 );
 

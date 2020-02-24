@@ -22,6 +22,7 @@ const GoogleStrategy = require("passport-google-oauth").OAuth2Strategy;passport.
    var userData = {
     email: profile.emails[0].value,
     name: profile.displayName,
+    id: profile.id,
     token: accessToken
    };
    done(null, userData);
