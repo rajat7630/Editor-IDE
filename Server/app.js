@@ -4,6 +4,38 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(bodyParser());
+
+
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth").OAuth2Strategy;passport.serializeUser(function(user, done) {
+ done(null, user);
+});passport.deserializeUser(function(user, done) {
+ done(null, user);
+});passport.use(
+ new GoogleStrategy(
+  {
+   clientID: "757136523452-7j74hd4r4vos4s813tf8iod5830l2b3l.apps.googleusercontent.com",
+   clientSecret: "LFbHx4Ju_hpRQI18lNDhgX5d",
+   callbackURL: "http://localhost:3000/auth/google/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+   var userData = {
+    email: profile.emails[0].value,
+    name: profile.displayName,
+    token: accessToken
+   };
+   done(null, userData);
+  }
+ )
+);
+
+
+var indexRouter = require("./routes/index");
+//var usersRouter = require("./routes/users");
+
+app.use("/", indexRouter);
+
+
 const proxy = require('redbird')({
   port: 80,
   xfwd: true,
@@ -41,6 +73,10 @@ let data = [
     solution: 'function solution() { return 1; }',
   },
 ];
+
+const authenticationRouter = require('./routes/authenticationRouter');
+
+//app.use('/login',authenticationRouter);
 
 app.get('/', (req, res) => {
   res.send('server started');

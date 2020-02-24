@@ -6,15 +6,11 @@
 
 </script>
 
+
 <Router>
-  <nav>
-    <Link to="/">Login</Link>
-    <Link to="admin">Admin</Link>
-    <Link to="home">Home</Link>
-  </nav>
   <div>
-    <Route path="admin" component="{Admin}" />
-    <Route path="home" component="{Home}"/>
-    <Route path="/"><Login /></Route>
+    <Route path="/admin" component="{Admin}" />
+    <Route path="/home" component="{Home}"/>
+    <Route path="/" component="{Login}"></Route>
   </div>
 </Router>

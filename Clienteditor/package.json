@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "start": "sirv public --port 5555",
+    "dev": "rollup -c -w --single",
+    "start": "sirv public --port 5555 --single",
     "deploy": "now --prod"
   },
   "devDependencies": {
