@@ -8,14 +8,14 @@ create table User_Info(
 
 INSERT INTO Problems
 ( 
- id, description, testCase, output
+ description, testcase, output, authorid 
 )
 VALUES
 ( 
-    1,'Write a program to find sum a array of integers', '[1, 2, 3, 4, 5]', '[15]'
+    'Write a program to find sum a array of integers', '[1, 2, 3, 4, 5]', '[15]', 1
 ),
 ( 
-    2,'Write  program to find product of given numbers','[1, 2, 3]', '[6]'
+    'Write  program to find product of given numbers','[1, 2, 3]', '[6]',2
 )
 
 CREATE TABLE Problems(
@@ -24,3 +24,5 @@ CREATE TABLE Problems(
     testCase VARCHAR(1000) NOT NULL,
     output VARCHAR(1000) NOT NULL
 )
+
+

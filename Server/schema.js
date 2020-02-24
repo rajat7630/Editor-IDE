@@ -1,46 +1,76 @@
-const {gql} =require("apollo-server");
-const {ApolloServer} = require("apollo-server");
-const typeDefs=gql`
-    type Problem {
-        id:ID!,
-        description:String,
-        testcase:String,
-        output:String
-    }
+const { gql } = require('apollo-server');
+const { ApolloServer } = require('apollo-server');
+const typeDefs = gql`
+  type Problem {
+    id: ID!
+    description: String
+    testCase: String
+    output: String
+    creationDate: String
+    author: Author
+  }
 
-    type Admin {
-        id:ID!,
-        email: String,
-        accessToken: String
-    }
+  type Test {
+    id: ID!
+    testName: String
+    difficulty: String
+    author: Author
+    creationDate: String
+    problems: [Problem]
+  }
 
-    type Solution{
-        id:ID!,
-        code:String,
-        problemId:Int
-    }
+  type Author {
+    id: ID!
+    email: String
+  }
 
-    type Student{
-        id:ID!,
-        email:String,
-        accessToken:String,
-        solutions:[Solution]
-    }
+  type Student {
+    id: ID!
+    email: String
+    solution: [Solution]
+  }
 
-    type Query{
-        problems:[Problem],
-        problem(id:String): Problem
-    }
+  type Solution {
+    id: ID!
+    solution: String
+    problem: Problem
+  }
 
-    type Mutation{
-        changeProblem(problemid:ID!):UpdateProblem!
-    }
+  type Query {
+    allProblems: [Problem]
+    problemById(id: ID!): Problem
+    allTests: [Test]
+    testByAuthor(id: ID!): [Test]
+    problemsByAuthor(id: ID!): [Problem]
+  }
 
-    type UpdateProblem{
-        success:Boolean!,
-        message : String,
-        Problems:[Problem]
-    }
-    `;
+  type Mutation {
+    addProblem(
+      description: String
+      testCase: String
+      output: String
+      authorId: ID
+    ): addNewProblem!
 
-module.exports=typeDefs;
+    addTest(
+      testName: String
+      difficulty: String
+      authorId: ID
+      problem: [ID]
+    ): createTest
+  }
+
+  type createTest{
+    success:Boolean,
+    message:String,
+    test:[Test]
+  }
+
+  type addNewProblem {
+    success: Boolean!
+    message: String
+    Problems: [Problem]
+  }
+`;
+
+module.exports = typeDefs;

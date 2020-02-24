@@ -1,12 +1,30 @@
 const store = require('./store.js');
 module.exports = {
   Query: {
-    problems: () => {
+    allProblems: () => {
       return store.getAllProblems();
     },
-    problem:(_,id)=>{
-        console.log("ww");
-        return store.getProblemById(id.id);
+    problemById: (_, {id}) => {
+      return store.getProblemById(id);
+    },
+    allTests: () => {
+      return store.getAllTests();
+    },
+    testByAuthor: (_, {id}) => {
+      return store.getTestByAuthor(id);
+    },
+    problemsByAuthor:(_, {id})=>{
+      return store.getProblemsByAuthor(id);
+    }
+  },
+    Mutation:{
+      addProblem:(_, newproblem)=>{
+        console.log(newproblem);
+        return store.addNewProblem(newproblem);
+      },
+
+      addTest:(_, newTest)=>{
+        return store.createNewTest(newTest);
+      }
     }
   }
-};
