@@ -4,6 +4,15 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    function assign(tar, src) {
+        // @ts-ignore
+        for (const k in src)
+            tar[k] = src[k];
+        return tar;
+    }
+    function is_promise(value) {
+        return value && typeof value === 'object' && typeof value.then === 'function';
+    }
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -39,6 +48,39 @@ var app = (function () {
     function component_subscribe(component, store, callback) {
         component.$$.on_destroy.push(subscribe(store, callback));
     }
+    function create_slot(definition, ctx, $$scope, fn) {
+        if (definition) {
+            const slot_ctx = get_slot_context(definition, ctx, $$scope, fn);
+            return definition[0](slot_ctx);
+        }
+    }
+    function get_slot_context(definition, ctx, $$scope, fn) {
+        return definition[1] && fn
+            ? assign($$scope.ctx.slice(), definition[1](fn(ctx)))
+            : $$scope.ctx;
+    }
+    function get_slot_changes(definition, $$scope, dirty, fn) {
+        if (definition[2] && fn) {
+            const lets = definition[2](fn(dirty));
+            if (typeof $$scope.dirty === 'object') {
+                const merged = [];
+                const len = Math.max($$scope.dirty.length, lets.length);
+                for (let i = 0; i < len; i += 1) {
+                    merged[i] = $$scope.dirty[i] | lets[i];
+                }
+                return merged;
+            }
+            return $$scope.dirty | lets;
+        }
+        return $$scope.dirty;
+    }
+    function exclude_internal_props(props) {
+        const result = {};
+        for (const k in props)
+            if (k[0] !== '$')
+                result[k] = props[k];
+        return result;
+    }
 
     function append(target, node) {
         target.appendChild(node);
@@ -63,6 +105,9 @@ var app = (function () {
     }
     function space() {
         return text(' ');
+    }
+    function empty() {
+        return text('');
     }
     function listen(node, event, handler, options) {
         node.addEventListener(event, handler, options);
@@ -104,8 +149,14 @@ var app = (function () {
     function afterUpdate(fn) {
         get_current_component().$$.after_update.push(fn);
     }
+    function onDestroy(fn) {
+        get_current_component().$$.on_destroy.push(fn);
+    }
     function setContext(key, context) {
         get_current_component().$$.context.set(key, context);
+    }
+    function getContext(key) {
+        return get_current_component().$$.context.get(key);
     }
 
     const dirty_components = [];
@@ -200,6 +251,109 @@ var app = (function () {
             });
             block.o(local);
         }
+    }
+
+    function handle_promise(promise, info) {
+        const token = info.token = {};
+        function update(type, index, key, value) {
+            if (info.token !== token)
+                return;
+            info.resolved = value;
+            let child_ctx = info.ctx;
+            if (key !== undefined) {
+                child_ctx = child_ctx.slice();
+                child_ctx[key] = value;
+            }
+            const block = type && (info.current = type)(child_ctx);
+            let needs_flush = false;
+            if (info.block) {
+                if (info.blocks) {
+                    info.blocks.forEach((block, i) => {
+                        if (i !== index && block) {
+                            group_outros();
+                            transition_out(block, 1, 1, () => {
+                                info.blocks[i] = null;
+                            });
+                            check_outros();
+                        }
+                    });
+                }
+                else {
+                    info.block.d(1);
+                }
+                block.c();
+                transition_in(block, 1);
+                block.m(info.mount(), info.anchor);
+                needs_flush = true;
+            }
+            info.block = block;
+            if (info.blocks)
+                info.blocks[index] = block;
+            if (needs_flush) {
+                flush();
+            }
+        }
+        if (is_promise(promise)) {
+            const current_component = get_current_component();
+            promise.then(value => {
+                set_current_component(current_component);
+                update(info.then, 1, info.value, value);
+                set_current_component(null);
+            }, error => {
+                set_current_component(current_component);
+                update(info.catch, 2, info.error, error);
+                set_current_component(null);
+            });
+            // if we previously had a then/catch block, destroy it
+            if (info.current !== info.pending) {
+                update(info.pending, 0);
+                return true;
+            }
+        }
+        else {
+            if (info.current !== info.then) {
+                update(info.then, 1, info.value, promise);
+                return true;
+            }
+            info.resolved = promise;
+        }
+    }
+
+    function get_spread_update(levels, updates) {
+        const update = {};
+        const to_null_out = {};
+        const accounted_for = { $$scope: 1 };
+        let i = levels.length;
+        while (i--) {
+            const o = levels[i];
+            const n = updates[i];
+            if (n) {
+                for (const key in o) {
+                    if (!(key in n))
+                        to_null_out[key] = 1;
+                }
+                for (const key in n) {
+                    if (!accounted_for[key]) {
+                        update[key] = n[key];
+                        accounted_for[key] = 1;
+                    }
+                }
+                levels[i] = n;
+            }
+            else {
+                for (const key in o) {
+                    accounted_for[key] = 1;
+                }
+            }
+        }
+        for (const key in to_null_out) {
+            if (!(key in update))
+                update[key] = undefined;
+        }
+        return update;
+    }
+    function get_spread_object(spread_props) {
+        return typeof spread_props === 'object' && spread_props !== null ? spread_props : {};
     }
     function create_component(block) {
         block && block.c();
@@ -375,6 +529,1151 @@ var app = (function () {
                 console.warn(`Component was already destroyed`); // eslint-disable-line no-console
             };
         }
+    }
+
+    const subscriber_queue = [];
+    /**
+     * Creates a `Readable` store that allows reading by subscription.
+     * @param value initial value
+     * @param {StartStopNotifier}start start and stop notifications for subscriptions
+     */
+    function readable(value, start) {
+        return {
+            subscribe: writable(value, start).subscribe,
+        };
+    }
+    /**
+     * Create a `Writable` store that allows both updating and reading by subscription.
+     * @param {*=}value initial value
+     * @param {StartStopNotifier=}start start and stop notifications for subscriptions
+     */
+    function writable(value, start = noop) {
+        let stop;
+        const subscribers = [];
+        function set(new_value) {
+            if (safe_not_equal(value, new_value)) {
+                value = new_value;
+                if (stop) { // store is ready
+                    const run_queue = !subscriber_queue.length;
+                    for (let i = 0; i < subscribers.length; i += 1) {
+                        const s = subscribers[i];
+                        s[1]();
+                        subscriber_queue.push(s, value);
+                    }
+                    if (run_queue) {
+                        for (let i = 0; i < subscriber_queue.length; i += 2) {
+                            subscriber_queue[i][0](subscriber_queue[i + 1]);
+                        }
+                        subscriber_queue.length = 0;
+                    }
+                }
+            }
+        }
+        function update(fn) {
+            set(fn(value));
+        }
+        function subscribe(run, invalidate = noop) {
+            const subscriber = [run, invalidate];
+            subscribers.push(subscriber);
+            if (subscribers.length === 1) {
+                stop = start(set) || noop;
+            }
+            run(value);
+            return () => {
+                const index = subscribers.indexOf(subscriber);
+                if (index !== -1) {
+                    subscribers.splice(index, 1);
+                }
+                if (subscribers.length === 0) {
+                    stop();
+                    stop = null;
+                }
+            };
+        }
+        return { set, update, subscribe };
+    }
+    function derived(stores, fn, initial_value) {
+        const single = !Array.isArray(stores);
+        const stores_array = single
+            ? [stores]
+            : stores;
+        const auto = fn.length < 2;
+        return readable(initial_value, (set) => {
+            let inited = false;
+            const values = [];
+            let pending = 0;
+            let cleanup = noop;
+            const sync = () => {
+                if (pending) {
+                    return;
+                }
+                cleanup();
+                const result = fn(single ? values[0] : values, set);
+                if (auto) {
+                    set(result);
+                }
+                else {
+                    cleanup = is_function(result) ? result : noop;
+                }
+            };
+            const unsubscribers = stores_array.map((store, i) => subscribe(store, (value) => {
+                values[i] = value;
+                pending &= ~(1 << i);
+                if (inited) {
+                    sync();
+                }
+            }, () => {
+                pending |= (1 << i);
+            }));
+            inited = true;
+            sync();
+            return function stop() {
+                run_all(unsubscribers);
+                cleanup();
+            };
+        });
+    }
+
+    const LOCATION = {};
+    const ROUTER = {};
+
+    /**
+     * Adapted from https://github.com/reach/router/blob/b60e6dd781d5d3a4bdaaf4de665649c0f6a7e78d/src/lib/history.js
+     *
+     * https://github.com/reach/router/blob/master/LICENSE
+     * */
+
+    function getLocation(source) {
+      return {
+        ...source.location,
+        state: source.history.state,
+        key: (source.history.state && source.history.state.key) || "initial"
+      };
+    }
+
+    function createHistory(source, options) {
+      const listeners = [];
+      let location = getLocation(source);
+
+      return {
+        get location() {
+          return location;
+        },
+
+        listen(listener) {
+          listeners.push(listener);
+
+          const popstateListener = () => {
+            location = getLocation(source);
+            listener({ location, action: "POP" });
+          };
+
+          source.addEventListener("popstate", popstateListener);
+
+          return () => {
+            source.removeEventListener("popstate", popstateListener);
+
+            const index = listeners.indexOf(listener);
+            listeners.splice(index, 1);
+          };
+        },
+
+        navigate(to, { state, replace = false } = {}) {
+          state = { ...state, key: Date.now() + "" };
+          // try...catch iOS Safari limits to 100 pushState calls
+          try {
+            if (replace) {
+              source.history.replaceState(state, null, to);
+            } else {
+              source.history.pushState(state, null, to);
+            }
+          } catch (e) {
+            source.location[replace ? "replace" : "assign"](to);
+          }
+
+          location = getLocation(source);
+          listeners.forEach(listener => listener({ location, action: "PUSH" }));
+        }
+      };
+    }
+
+    // Stores history entries in memory for testing or other platforms like Native
+    function createMemorySource(initialPathname = "/") {
+      let index = 0;
+      const stack = [{ pathname: initialPathname, search: "" }];
+      const states = [];
+
+      return {
+        get location() {
+          return stack[index];
+        },
+        addEventListener(name, fn) {},
+        removeEventListener(name, fn) {},
+        history: {
+          get entries() {
+            return stack;
+          },
+          get index() {
+            return index;
+          },
+          get state() {
+            return states[index];
+          },
+          pushState(state, _, uri) {
+            const [pathname, search = ""] = uri.split("?");
+            index++;
+            stack.push({ pathname, search });
+            states.push(state);
+          },
+          replaceState(state, _, uri) {
+            const [pathname, search = ""] = uri.split("?");
+            stack[index] = { pathname, search };
+            states[index] = state;
+          }
+        }
+      };
+    }
+
+    // Global history uses window.history as the source if available,
+    // otherwise a memory history
+    const canUseDOM = Boolean(
+      typeof window !== "undefined" &&
+        window.document &&
+        window.document.createElement
+    );
+    const globalHistory = createHistory(canUseDOM ? window : createMemorySource());
+
+    /**
+     * Adapted from https://github.com/reach/router/blob/b60e6dd781d5d3a4bdaaf4de665649c0f6a7e78d/src/lib/utils.js
+     *
+     * https://github.com/reach/router/blob/master/LICENSE
+     * */
+
+    const paramRe = /^:(.+)/;
+
+    const SEGMENT_POINTS = 4;
+    const STATIC_POINTS = 3;
+    const DYNAMIC_POINTS = 2;
+    const SPLAT_PENALTY = 1;
+    const ROOT_POINTS = 1;
+
+    /**
+     * Check if `segment` is a root segment
+     * @param {string} segment
+     * @return {boolean}
+     */
+    function isRootSegment(segment) {
+      return segment === "";
+    }
+
+    /**
+     * Check if `segment` is a dynamic segment
+     * @param {string} segment
+     * @return {boolean}
+     */
+    function isDynamic(segment) {
+      return paramRe.test(segment);
+    }
+
+    /**
+     * Check if `segment` is a splat
+     * @param {string} segment
+     * @return {boolean}
+     */
+    function isSplat(segment) {
+      return segment[0] === "*";
+    }
+
+    /**
+     * Split up the URI into segments delimited by `/`
+     * @param {string} uri
+     * @return {string[]}
+     */
+    function segmentize(uri) {
+      return (
+        uri
+          // Strip starting/ending `/`
+          .replace(/(^\/+|\/+$)/g, "")
+          .split("/")
+      );
+    }
+
+    /**
+     * Strip `str` of potential start and end `/`
+     * @param {string} str
+     * @return {string}
+     */
+    function stripSlashes(str) {
+      return str.replace(/(^\/+|\/+$)/g, "");
+    }
+
+    /**
+     * Score a route depending on how its individual segments look
+     * @param {object} route
+     * @param {number} index
+     * @return {object}
+     */
+    function rankRoute(route, index) {
+      const score = route.default
+        ? 0
+        : segmentize(route.path).reduce((score, segment) => {
+            score += SEGMENT_POINTS;
+
+            if (isRootSegment(segment)) {
+              score += ROOT_POINTS;
+            } else if (isDynamic(segment)) {
+              score += DYNAMIC_POINTS;
+            } else if (isSplat(segment)) {
+              score -= SEGMENT_POINTS + SPLAT_PENALTY;
+            } else {
+              score += STATIC_POINTS;
+            }
+
+            return score;
+          }, 0);
+
+      return { route, score, index };
+    }
+
+    /**
+     * Give a score to all routes and sort them on that
+     * @param {object[]} routes
+     * @return {object[]}
+     */
+    function rankRoutes(routes) {
+      return (
+        routes
+          .map(rankRoute)
+          // If two routes have the exact same score, we go by index instead
+          .sort((a, b) =>
+            a.score < b.score ? 1 : a.score > b.score ? -1 : a.index - b.index
+          )
+      );
+    }
+
+    /**
+     * Ranks and picks the best route to match. Each segment gets the highest
+     * amount of points, then the type of segment gets an additional amount of
+     * points where
+     *
+     *  static > dynamic > splat > root
+     *
+     * This way we don't have to worry about the order of our routes, let the
+     * computers do it.
+     *
+     * A route looks like this
+     *
+     *  { path, default, value }
+     *
+     * And a returned match looks like:
+     *
+     *  { route, params, uri }
+     *
+     * @param {object[]} routes
+     * @param {string} uri
+     * @return {?object}
+     */
+    function pick(routes, uri) {
+      let match;
+      let default_;
+
+      const [uriPathname] = uri.split("?");
+      const uriSegments = segmentize(uriPathname);
+      const isRootUri = uriSegments[0] === "";
+      const ranked = rankRoutes(routes);
+
+      for (let i = 0, l = ranked.length; i < l; i++) {
+        const route = ranked[i].route;
+        let missed = false;
+
+        if (route.default) {
+          default_ = {
+            route,
+            params: {},
+            uri
+          };
+          continue;
+        }
+
+        const routeSegments = segmentize(route.path);
+        const params = {};
+        const max = Math.max(uriSegments.length, routeSegments.length);
+        let index = 0;
+
+        for (; index < max; index++) {
+          const routeSegment = routeSegments[index];
+          const uriSegment = uriSegments[index];
+
+          if (routeSegment !== undefined && isSplat(routeSegment)) {
+            // Hit a splat, just grab the rest, and return a match
+            // uri:   /files/documents/work
+            // route: /files/* or /files/*splatname
+            const splatName = routeSegment === "*" ? "*" : routeSegment.slice(1);
+
+            params[splatName] = uriSegments
+              .slice(index)
+              .map(decodeURIComponent)
+              .join("/");
+            break;
+          }
+
+          if (uriSegment === undefined) {
+            // URI is shorter than the route, no match
+            // uri:   /users
+            // route: /users/:userId
+            missed = true;
+            break;
+          }
+
+          let dynamicMatch = paramRe.exec(routeSegment);
+
+          if (dynamicMatch && !isRootUri) {
+            const value = decodeURIComponent(uriSegment);
+            params[dynamicMatch[1]] = value;
+          } else if (routeSegment !== uriSegment) {
+            // Current segments don't match, not dynamic, not splat, so no match
+            // uri:   /users/123/settings
+            // route: /users/:id/profile
+            missed = true;
+            break;
+          }
+        }
+
+        if (!missed) {
+          match = {
+            route,
+            params,
+            uri: "/" + uriSegments.slice(0, index).join("/")
+          };
+          break;
+        }
+      }
+
+      return match || default_ || null;
+    }
+
+    /**
+     * Check if the `path` matches the `uri`.
+     * @param {string} path
+     * @param {string} uri
+     * @return {?object}
+     */
+    function match(route, uri) {
+      return pick([route], uri);
+    }
+
+    /**
+     * Combines the `basepath` and the `path` into one path.
+     * @param {string} basepath
+     * @param {string} path
+     */
+    function combinePaths(basepath, path) {
+      return `${stripSlashes(
+    path === "/" ? basepath : `${stripSlashes(basepath)}/${stripSlashes(path)}`
+  )}/`;
+    }
+
+    /* node_modules/svelte-routing/src/Router.svelte generated by Svelte v3.18.1 */
+
+    function create_fragment(ctx) {
+    	let current;
+    	const default_slot_template = /*$$slots*/ ctx[16].default;
+    	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[15], null);
+
+    	const block = {
+    		c: function create() {
+    			if (default_slot) default_slot.c();
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			if (default_slot) {
+    				default_slot.m(target, anchor);
+    			}
+
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (default_slot && default_slot.p && dirty & /*$$scope*/ 32768) {
+    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[15], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[15], dirty, null));
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(default_slot, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(default_slot, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (default_slot) default_slot.d(detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance($$self, $$props, $$invalidate) {
+    	let $base;
+    	let $location;
+    	let $routes;
+    	let { basepath = "/" } = $$props;
+    	let { url = null } = $$props;
+    	const locationContext = getContext(LOCATION);
+    	const routerContext = getContext(ROUTER);
+    	const routes = writable([]);
+    	validate_store(routes, "routes");
+    	component_subscribe($$self, routes, value => $$invalidate(8, $routes = value));
+    	const activeRoute = writable(null);
+    	let hasActiveRoute = false; // Used in SSR to synchronously set that a Route is active.
+
+    	// If locationContext is not set, this is the topmost Router in the tree.
+    	// If the `url` prop is given we force the location to it.
+    	const location = locationContext || writable(url ? { pathname: url } : globalHistory.location);
+
+    	validate_store(location, "location");
+    	component_subscribe($$self, location, value => $$invalidate(7, $location = value));
+
+    	// If routerContext is set, the routerBase of the parent Router
+    	// will be the base for this Router's descendants.
+    	// If routerContext is not set, the path and resolved uri will both
+    	// have the value of the basepath prop.
+    	const base = routerContext
+    	? routerContext.routerBase
+    	: writable({ path: basepath, uri: basepath });
+
+    	validate_store(base, "base");
+    	component_subscribe($$self, base, value => $$invalidate(6, $base = value));
+
+    	const routerBase = derived([base, activeRoute], ([base, activeRoute]) => {
+    		// If there is no activeRoute, the routerBase will be identical to the base.
+    		if (activeRoute === null) {
+    			return base;
+    		}
+
+    		const { path: basepath } = base;
+    		const { route, uri } = activeRoute;
+
+    		// Remove the potential /* or /*splatname from
+    		// the end of the child Routes relative paths.
+    		const path = route.default
+    		? basepath
+    		: route.path.replace(/\*.*$/, "");
+
+    		return { path, uri };
+    	});
+
+    	function registerRoute(route) {
+    		const { path: basepath } = $base;
+    		let { path } = route;
+
+    		// We store the original path in the _path property so we can reuse
+    		// it when the basepath changes. The only thing that matters is that
+    		// the route reference is intact, so mutation is fine.
+    		route._path = path;
+
+    		route.path = combinePaths(basepath, path);
+
+    		if (typeof window === "undefined") {
+    			// In SSR we should set the activeRoute immediately if it is a match.
+    			// If there are more Routes being registered after a match is found,
+    			// we just skip them.
+    			if (hasActiveRoute) {
+    				return;
+    			}
+
+    			const matchingRoute = match(route, $location.pathname);
+
+    			if (matchingRoute) {
+    				activeRoute.set(matchingRoute);
+    				hasActiveRoute = true;
+    			}
+    		} else {
+    			routes.update(rs => {
+    				rs.push(route);
+    				return rs;
+    			});
+    		}
+    	}
+
+    	function unregisterRoute(route) {
+    		routes.update(rs => {
+    			const index = rs.indexOf(route);
+    			rs.splice(index, 1);
+    			return rs;
+    		});
+    	}
+
+    	if (!locationContext) {
+    		// The topmost Router in the tree is responsible for updating
+    		// the location store and supplying it through context.
+    		onMount(() => {
+    			const unlisten = globalHistory.listen(history => {
+    				location.set(history.location);
+    			});
+
+    			return unlisten;
+    		});
+
+    		setContext(LOCATION, location);
+    	}
+
+    	setContext(ROUTER, {
+    		activeRoute,
+    		base,
+    		routerBase,
+    		registerRoute,
+    		unregisterRoute
+    	});
+
+    	const writable_props = ["basepath", "url"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Router> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+
+    	$$self.$set = $$props => {
+    		if ("basepath" in $$props) $$invalidate(3, basepath = $$props.basepath);
+    		if ("url" in $$props) $$invalidate(4, url = $$props.url);
+    		if ("$$scope" in $$props) $$invalidate(15, $$scope = $$props.$$scope);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {
+    			basepath,
+    			url,
+    			hasActiveRoute,
+    			$base,
+    			$location,
+    			$routes
+    		};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("basepath" in $$props) $$invalidate(3, basepath = $$props.basepath);
+    		if ("url" in $$props) $$invalidate(4, url = $$props.url);
+    		if ("hasActiveRoute" in $$props) hasActiveRoute = $$props.hasActiveRoute;
+    		if ("$base" in $$props) base.set($base = $$props.$base);
+    		if ("$location" in $$props) location.set($location = $$props.$location);
+    		if ("$routes" in $$props) routes.set($routes = $$props.$routes);
+    	};
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*$base*/ 64) {
+    			// This reactive statement will update all the Routes' path when
+    			// the basepath changes.
+    			 {
+    				const { path: basepath } = $base;
+
+    				routes.update(rs => {
+    					rs.forEach(r => r.path = combinePaths(basepath, r._path));
+    					return rs;
+    				});
+    			}
+    		}
+
+    		if ($$self.$$.dirty & /*$routes, $location*/ 384) {
+    			// This reactive statement will be run when the Router is created
+    			// when there are no Routes and then again the following tick, so it
+    			// will not find an active Route in SSR and in the browser it will only
+    			// pick an active Route after all Routes have been registered.
+    			 {
+    				const bestMatch = pick($routes, $location.pathname);
+    				activeRoute.set(bestMatch);
+    			}
+    		}
+    	};
+
+    	return [
+    		routes,
+    		location,
+    		base,
+    		basepath,
+    		url,
+    		hasActiveRoute,
+    		$base,
+    		$location,
+    		$routes,
+    		locationContext,
+    		routerContext,
+    		activeRoute,
+    		routerBase,
+    		registerRoute,
+    		unregisterRoute,
+    		$$scope,
+    		$$slots
+    	];
+    }
+
+    class Router extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance, create_fragment, safe_not_equal, { basepath: 3, url: 4 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Router",
+    			options,
+    			id: create_fragment.name
+    		});
+    	}
+
+    	get basepath() {
+    		throw new Error("<Router>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set basepath(value) {
+    		throw new Error("<Router>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get url() {
+    		throw new Error("<Router>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set url(value) {
+    		throw new Error("<Router>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* node_modules/svelte-routing/src/Route.svelte generated by Svelte v3.18.1 */
+
+    const get_default_slot_changes = dirty => ({
+    	params: dirty & /*routeParams*/ 2,
+    	location: dirty & /*$location*/ 16
+    });
+
+    const get_default_slot_context = ctx => ({
+    	params: /*routeParams*/ ctx[1],
+    	location: /*$location*/ ctx[4]
+    });
+
+    // (40:0) {#if $activeRoute !== null && $activeRoute.route === route}
+    function create_if_block(ctx) {
+    	let current_block_type_index;
+    	let if_block;
+    	let if_block_anchor;
+    	let current;
+    	const if_block_creators = [create_if_block_1, create_else_block];
+    	const if_blocks = [];
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*component*/ ctx[0] !== null) return 0;
+    		return 1;
+    	}
+
+    	current_block_type_index = select_block_type(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+    	const block = {
+    		c: function create() {
+    			if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if_blocks[current_block_type_index].m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			let previous_block_index = current_block_type_index;
+    			current_block_type_index = select_block_type(ctx);
+
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
+    				group_outros();
+
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+
+    				check_outros();
+    				if_block = if_blocks[current_block_type_index];
+
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
+    				}
+
+    				transition_in(if_block, 1);
+    				if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if_blocks[current_block_type_index].d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block.name,
+    		type: "if",
+    		source: "(40:0) {#if $activeRoute !== null && $activeRoute.route === route}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (43:2) {:else}
+    function create_else_block(ctx) {
+    	let current;
+    	const default_slot_template = /*$$slots*/ ctx[13].default;
+    	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[12], get_default_slot_context);
+
+    	const block = {
+    		c: function create() {
+    			if (default_slot) default_slot.c();
+    		},
+    		m: function mount(target, anchor) {
+    			if (default_slot) {
+    				default_slot.m(target, anchor);
+    			}
+
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (default_slot && default_slot.p && dirty & /*$$scope, routeParams, $location*/ 4114) {
+    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[12], get_default_slot_context), get_slot_changes(default_slot_template, /*$$scope*/ ctx[12], dirty, get_default_slot_changes));
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(default_slot, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(default_slot, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (default_slot) default_slot.d(detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block.name,
+    		type: "else",
+    		source: "(43:2) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (41:2) {#if component !== null}
+    function create_if_block_1(ctx) {
+    	let switch_instance_anchor;
+    	let current;
+
+    	const switch_instance_spread_levels = [
+    		{ location: /*$location*/ ctx[4] },
+    		/*routeParams*/ ctx[1],
+    		/*routeProps*/ ctx[2]
+    	];
+
+    	var switch_value = /*component*/ ctx[0];
+
+    	function switch_props(ctx) {
+    		let switch_instance_props = {};
+
+    		for (let i = 0; i < switch_instance_spread_levels.length; i += 1) {
+    			switch_instance_props = assign(switch_instance_props, switch_instance_spread_levels[i]);
+    		}
+
+    		return {
+    			props: switch_instance_props,
+    			$$inline: true
+    		};
+    	}
+
+    	if (switch_value) {
+    		var switch_instance = new switch_value(switch_props());
+    	}
+
+    	const block = {
+    		c: function create() {
+    			if (switch_instance) create_component(switch_instance.$$.fragment);
+    			switch_instance_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if (switch_instance) {
+    				mount_component(switch_instance, target, anchor);
+    			}
+
+    			insert_dev(target, switch_instance_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const switch_instance_changes = (dirty & /*$location, routeParams, routeProps*/ 22)
+    			? get_spread_update(switch_instance_spread_levels, [
+    					dirty & /*$location*/ 16 && { location: /*$location*/ ctx[4] },
+    					dirty & /*routeParams*/ 2 && get_spread_object(/*routeParams*/ ctx[1]),
+    					dirty & /*routeProps*/ 4 && get_spread_object(/*routeProps*/ ctx[2])
+    				])
+    			: {};
+
+    			if (switch_value !== (switch_value = /*component*/ ctx[0])) {
+    				if (switch_instance) {
+    					group_outros();
+    					const old_component = switch_instance;
+
+    					transition_out(old_component.$$.fragment, 1, 0, () => {
+    						destroy_component(old_component, 1);
+    					});
+
+    					check_outros();
+    				}
+
+    				if (switch_value) {
+    					switch_instance = new switch_value(switch_props());
+    					create_component(switch_instance.$$.fragment);
+    					transition_in(switch_instance.$$.fragment, 1);
+    					mount_component(switch_instance, switch_instance_anchor.parentNode, switch_instance_anchor);
+    				} else {
+    					switch_instance = null;
+    				}
+    			} else if (switch_value) {
+    				switch_instance.$set(switch_instance_changes);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			if (switch_instance) transition_in(switch_instance.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			if (switch_instance) transition_out(switch_instance.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(switch_instance_anchor);
+    			if (switch_instance) destroy_component(switch_instance, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1.name,
+    		type: "if",
+    		source: "(41:2) {#if component !== null}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$1(ctx) {
+    	let if_block_anchor;
+    	let current;
+    	let if_block = /*$activeRoute*/ ctx[3] !== null && /*$activeRoute*/ ctx[3].route === /*route*/ ctx[7] && create_if_block(ctx);
+
+    	const block = {
+    		c: function create() {
+    			if (if_block) if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			if (if_block) if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (/*$activeRoute*/ ctx[3] !== null && /*$activeRoute*/ ctx[3].route === /*route*/ ctx[7]) {
+    				if (if_block) {
+    					if_block.p(ctx, dirty);
+    					transition_in(if_block, 1);
+    				} else {
+    					if_block = create_if_block(ctx);
+    					if_block.c();
+    					transition_in(if_block, 1);
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    				}
+    			} else if (if_block) {
+    				group_outros();
+
+    				transition_out(if_block, 1, 1, () => {
+    					if_block = null;
+    				});
+
+    				check_outros();
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (if_block) if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$1($$self, $$props, $$invalidate) {
+    	let $activeRoute;
+    	let $location;
+    	let { path = "" } = $$props;
+    	let { component = null } = $$props;
+    	const { registerRoute, unregisterRoute, activeRoute } = getContext(ROUTER);
+    	validate_store(activeRoute, "activeRoute");
+    	component_subscribe($$self, activeRoute, value => $$invalidate(3, $activeRoute = value));
+    	const location = getContext(LOCATION);
+    	validate_store(location, "location");
+    	component_subscribe($$self, location, value => $$invalidate(4, $location = value));
+
+    	const route = {
+    		path,
+    		// If no path prop is given, this Route will act as the default Route
+    		// that is rendered if no other Route in the Router is a match.
+    		default: path === ""
+    	};
+
+    	let routeParams = {};
+    	let routeProps = {};
+    	registerRoute(route);
+
+    	// There is no need to unregister Routes in SSR since it will all be
+    	// thrown away anyway.
+    	if (typeof window !== "undefined") {
+    		onDestroy(() => {
+    			unregisterRoute(route);
+    		});
+    	}
+
+    	let { $$slots = {}, $$scope } = $$props;
+
+    	$$self.$set = $$new_props => {
+    		$$invalidate(11, $$props = assign(assign({}, $$props), exclude_internal_props($$new_props)));
+    		if ("path" in $$new_props) $$invalidate(8, path = $$new_props.path);
+    		if ("component" in $$new_props) $$invalidate(0, component = $$new_props.component);
+    		if ("$$scope" in $$new_props) $$invalidate(12, $$scope = $$new_props.$$scope);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {
+    			path,
+    			component,
+    			routeParams,
+    			routeProps,
+    			$activeRoute,
+    			$location
+    		};
+    	};
+
+    	$$self.$inject_state = $$new_props => {
+    		$$invalidate(11, $$props = assign(assign({}, $$props), $$new_props));
+    		if ("path" in $$props) $$invalidate(8, path = $$new_props.path);
+    		if ("component" in $$props) $$invalidate(0, component = $$new_props.component);
+    		if ("routeParams" in $$props) $$invalidate(1, routeParams = $$new_props.routeParams);
+    		if ("routeProps" in $$props) $$invalidate(2, routeProps = $$new_props.routeProps);
+    		if ("$activeRoute" in $$props) activeRoute.set($activeRoute = $$new_props.$activeRoute);
+    		if ("$location" in $$props) location.set($location = $$new_props.$location);
+    	};
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*$activeRoute*/ 8) {
+    			 if ($activeRoute && $activeRoute.route === route) {
+    				$$invalidate(1, routeParams = $activeRoute.params);
+    			}
+    		}
+
+    		 {
+    			const { path, component, ...rest } = $$props;
+    			$$invalidate(2, routeProps = rest);
+    		}
+    	};
+
+    	$$props = exclude_internal_props($$props);
+
+    	return [
+    		component,
+    		routeParams,
+    		routeProps,
+    		$activeRoute,
+    		$location,
+    		activeRoute,
+    		location,
+    		route,
+    		path,
+    		registerRoute,
+    		unregisterRoute,
+    		$$props,
+    		$$scope,
+    		$$slots
+    	];
+    }
+
+    class Route extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { path: 8, component: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Route",
+    			options,
+    			id: create_fragment$1.name
+    		});
+    	}
+
+    	get path() {
+    		throw new Error("<Route>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set path(value) {
+    		throw new Error("<Route>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get component() {
+    		throw new Error("<Route>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set component(value) {
+    		throw new Error("<Route>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
     }
 
     function unwrapExports (x) {
@@ -25362,109 +26661,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
                     })();
     });
 
-    const subscriber_queue = [];
-    /**
-     * Creates a `Readable` store that allows reading by subscription.
-     * @param value initial value
-     * @param {StartStopNotifier}start start and stop notifications for subscriptions
-     */
-    function readable(value, start) {
-        return {
-            subscribe: writable(value, start).subscribe,
-        };
-    }
-    /**
-     * Create a `Writable` store that allows both updating and reading by subscription.
-     * @param {*=}value initial value
-     * @param {StartStopNotifier=}start start and stop notifications for subscriptions
-     */
-    function writable(value, start = noop) {
-        let stop;
-        const subscribers = [];
-        function set(new_value) {
-            if (safe_not_equal(value, new_value)) {
-                value = new_value;
-                if (stop) { // store is ready
-                    const run_queue = !subscriber_queue.length;
-                    for (let i = 0; i < subscribers.length; i += 1) {
-                        const s = subscribers[i];
-                        s[1]();
-                        subscriber_queue.push(s, value);
-                    }
-                    if (run_queue) {
-                        for (let i = 0; i < subscriber_queue.length; i += 2) {
-                            subscriber_queue[i][0](subscriber_queue[i + 1]);
-                        }
-                        subscriber_queue.length = 0;
-                    }
-                }
-            }
-        }
-        function update(fn) {
-            set(fn(value));
-        }
-        function subscribe(run, invalidate = noop) {
-            const subscriber = [run, invalidate];
-            subscribers.push(subscriber);
-            if (subscribers.length === 1) {
-                stop = start(set) || noop;
-            }
-            run(value);
-            return () => {
-                const index = subscribers.indexOf(subscriber);
-                if (index !== -1) {
-                    subscribers.splice(index, 1);
-                }
-                if (subscribers.length === 0) {
-                    stop();
-                    stop = null;
-                }
-            };
-        }
-        return { set, update, subscribe };
-    }
-    function derived(stores, fn, initial_value) {
-        const single = !Array.isArray(stores);
-        const stores_array = single
-            ? [stores]
-            : stores;
-        const auto = fn.length < 2;
-        return readable(initial_value, (set) => {
-            let inited = false;
-            const values = [];
-            let pending = 0;
-            let cleanup = noop;
-            const sync = () => {
-                if (pending) {
-                    return;
-                }
-                cleanup();
-                const result = fn(single ? values[0] : values, set);
-                if (auto) {
-                    set(result);
-                }
-                else {
-                    cleanup = is_function(result) ? result : noop;
-                }
-            };
-            const unsubscribers = stores_array.map((store, i) => subscribe(store, (value) => {
-                values[i] = value;
-                pending &= ~(1 << i);
-                if (inited) {
-                    sync();
-                }
-            }, () => {
-                pending |= (1 << i);
-            }));
-            inited = true;
-            sync();
-            return function stop() {
-                run_all(unsubscribers);
-                cleanup();
-            };
-        });
-    }
-
     const { subscribe: subscribe$1, update: update$1 } = writable([
       {
         id: 61167925,
@@ -25657,7 +26853,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/EditorWindow.svelte generated by Svelte v3.18.1 */
     const file = "src/EditorWindow.svelte";
 
-    function create_fragment(ctx) {
+    function create_fragment$2(ctx) {
     	let div;
     	let dispose;
 
@@ -25686,7 +26882,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment.name,
+    		id: create_fragment$2.name,
     		type: "component",
     		source: "",
     		ctx
@@ -25695,7 +26891,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance($$self, $$props, $$invalidate) {
+    function instance$2($$self, $$props, $$invalidate) {
     	let $currentTab;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(2, $currentTab = $$value));
@@ -25753,13 +26949,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class EditorWindow extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance, create_fragment, safe_not_equal, {});
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "EditorWindow",
     			options,
-    			id: create_fragment.name
+    			id: create_fragment$2.name
     		});
     	}
     }
@@ -25767,7 +26963,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/inputTest.svelte generated by Svelte v3.18.1 */
     const file$1 = "src/inputTest.svelte";
 
-    function create_fragment$1(ctx) {
+    function create_fragment$3(ctx) {
     	let div0;
     	let t0;
     	let div1;
@@ -25810,7 +27006,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$1.name,
+    		id: create_fragment$3.name,
     		type: "component",
     		source: "",
     		ctx
@@ -25819,7 +27015,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$1($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let $currentTab;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(3, $currentTab = $$value));
@@ -25895,13 +27091,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class InputTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "InputTest",
     			options,
-    			id: create_fragment$1.name
+    			id: create_fragment$3.name
     		});
     	}
     }
@@ -25909,7 +27105,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/outputTest.svelte generated by Svelte v3.18.1 */
     const file$2 = "src/outputTest.svelte";
 
-    function create_fragment$2(ctx) {
+    function create_fragment$4(ctx) {
     	let div0;
     	let t0;
     	let div1;
@@ -25952,7 +27148,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$2.name,
+    		id: create_fragment$4.name,
     		type: "component",
     		source: "",
     		ctx
@@ -25961,7 +27157,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$2($$self, $$props, $$invalidate) {
+    function instance$4($$self, $$props, $$invalidate) {
     	let $currentTab;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(3, $currentTab = $$value));
@@ -26031,13 +27227,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class OutputTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "OutputTest",
     			options,
-    			id: create_fragment$2.name
+    			id: create_fragment$4.name
     		});
     	}
     }
@@ -26045,7 +27241,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/newProblem.svelte generated by Svelte v3.18.1 */
     const file$3 = "src/newProblem.svelte";
 
-    function create_fragment$3(ctx) {
+    function create_fragment$5(ctx) {
     	let div3;
     	let h1;
     	let t1;
@@ -26166,7 +27362,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$3.name,
+    		id: create_fragment$5.name,
     		type: "component",
     		source: "",
     		ctx
@@ -26175,7 +27371,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$3($$self, $$props, $$invalidate) {
+    function instance$5($$self, $$props, $$invalidate) {
     	let $currentTab;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(0, $currentTab = $$value));
@@ -26215,13 +27411,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class NewProblem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+    		init(this, options, instance$5, create_fragment$5, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "NewProblem",
     			options,
-    			id: create_fragment$3.name
+    			id: create_fragment$5.name
     		});
     	}
     }
@@ -26230,7 +27426,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const file$4 = "src/EditorArea.svelte";
 
     // (81:2) {:else}
-    function create_else_block(ctx) {
+    function create_else_block$1(ctx) {
     	let h1;
     	let t_value = /*$currentTab*/ ctx[4].problem + "";
     	let t;
@@ -26258,7 +27454,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block.name,
+    		id: create_else_block$1.name,
     		type: "else",
     		source: "(81:2) {:else}",
     		ctx
@@ -26268,7 +27464,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (79:2) {#if $currentTab.changeData}
-    function create_if_block(ctx) {
+    function create_if_block$1(ctx) {
     	let current;
     	const newproblem = new NewProblem({ $$inline: true });
 
@@ -26297,7 +27493,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block.name,
+    		id: create_if_block$1.name,
     		type: "if",
     		source: "(79:2) {#if $currentTab.changeData}",
     		ctx
@@ -26306,7 +27502,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$4(ctx) {
+    function create_fragment$6(ctx) {
     	let div4;
     	let current_block_type_index;
     	let if_block;
@@ -26326,7 +27522,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t9;
     	let current;
     	let dispose;
-    	const if_block_creators = [create_if_block, create_else_block];
+    	const if_block_creators = [create_if_block$1, create_else_block$1];
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
@@ -26462,7 +27658,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -26471,7 +27667,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let $currentTab;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(4, $currentTab = $$value));
@@ -26546,13 +27742,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class EditorArea extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "EditorArea",
     			options,
-    			id: create_fragment$4.name
+    			id: create_fragment$6.name
     		});
     	}
     }
@@ -26646,7 +27842,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$5(ctx) {
+    function create_fragment$7(ctx) {
     	let ul;
     	let t0;
     	let button;
@@ -26723,7 +27919,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$5.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -26732,7 +27928,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$5($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $dataStore;
     	validate_store(dataStore, "dataStore");
     	component_subscribe($$self, dataStore, $$value => $$invalidate(0, $dataStore = $$value));
@@ -26776,13 +27972,150 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Tabs extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$5, create_fragment$5, safe_not_equal, {});
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Tabs",
     			options,
-    			id: create_fragment$5.name
+    			id: create_fragment$7.name
+    		});
+    	}
+    }
+
+    /* src/Home.svelte generated by Svelte v3.18.1 */
+    const file$6 = "src/Home.svelte";
+
+    function create_fragment$8(ctx) {
+    	let div;
+    	let t;
+    	let current;
+    	let dispose;
+    	const tabs = new Tabs({ $$inline: true });
+    	const editorarea = new EditorArea({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			create_component(tabs.$$.fragment);
+    			t = space();
+    			create_component(editorarea.$$.fragment);
+    			attr_dev(div, "class", "flex flex-col w-full");
+    			add_location(div, file$6, 44, 0, 1270);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			mount_component(tabs, div, null);
+    			insert_dev(target, t, anchor);
+    			mount_component(editorarea, target, anchor);
+    			current = true;
+    			dispose = listen_dev(window, "keydown", /*keydown_handler*/ ctx[2], false, false, false);
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(tabs.$$.fragment, local);
+    			transition_in(editorarea.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(tabs.$$.fragment, local);
+    			transition_out(editorarea.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_component(tabs);
+    			if (detaching) detach_dev(t);
+    			destroy_component(editorarea, detaching);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$8.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$8($$self, $$props, $$invalidate) {
+    	let $currentTab;
+    	let $dataStore;
+    	validate_store(currentTab, "currentTab");
+    	component_subscribe($$self, currentTab, $$value => $$invalidate(0, $currentTab = $$value));
+    	validate_store(dataStore, "dataStore");
+    	component_subscribe($$self, dataStore, $$value => $$invalidate(1, $dataStore = $$value));
+
+    	onMount(() => {
+    		dataStore.updateData();
+    	});
+
+    	const keydown_handler = evt => {
+    		if (evt.ctrlKey && evt.key === "s" && $currentTab.changeData) {
+    			console.log(evt);
+    			evt.preventDefault();
+    			dataStore.changeDataUpdate($currentTab.id);
+    		} else if (evt.ctrlKey && evt.altKey && evt.key === "p" && $currentTab.changeData === false) {
+    			evt.preventDefault();
+    			dataStore.changeDataUpdate($currentTab.id);
+    		} else if (evt.ctrlKey && evt.key === "p" && evt.altKey === false) {
+    			evt.preventDefault();
+    			dataStore.add();
+    		} else if (evt.ctrlKey && evt.altKey && evt.key === "c") {
+    			const id = $currentTab.id;
+
+    			if ($dataStore.length === 1) {
+    				return;
+    			}
+
+    			$dataStore.some((tab, index) => {
+    				if (tab.id !== $currentTab.id) {
+    					return false;
+    				}
+
+    				if (index === 0) {
+    					dataStore.activate($dataStore[index + 1].id);
+    					return true;
+    				}
+
+    				dataStore.activate($dataStore[index - 1].id);
+    				return true;
+    			});
+
+    			dataStore.deleteTab(id);
+    		}
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
+    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
+    	};
+
+    	return [$currentTab, $dataStore, keydown_handler];
+    }
+
+    class Home extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$8, create_fragment$8, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Home",
+    			options,
+    			id: create_fragment$8.name
     		});
     	}
     }
@@ -26912,1568 +28245,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       return tag;
     }
 
-    var QueryDocumentKeys = {
-      Name: [],
-      Document: ['definitions'],
-      OperationDefinition: ['name', 'variableDefinitions', 'directives', 'selectionSet'],
-      VariableDefinition: ['variable', 'type', 'defaultValue', 'directives'],
-      Variable: ['name'],
-      SelectionSet: ['selections'],
-      Field: ['alias', 'name', 'arguments', 'directives', 'selectionSet'],
-      Argument: ['name', 'value'],
-      FragmentSpread: ['name', 'directives'],
-      InlineFragment: ['typeCondition', 'directives', 'selectionSet'],
-      FragmentDefinition: ['name', // Note: fragment variable definitions are experimental and may be changed
-      // or removed in the future.
-      'variableDefinitions', 'typeCondition', 'directives', 'selectionSet'],
-      IntValue: [],
-      FloatValue: [],
-      StringValue: [],
-      BooleanValue: [],
-      NullValue: [],
-      EnumValue: [],
-      ListValue: ['values'],
-      ObjectValue: ['fields'],
-      ObjectField: ['name', 'value'],
-      Directive: ['name', 'arguments'],
-      NamedType: ['name'],
-      ListType: ['type'],
-      NonNullType: ['type'],
-      SchemaDefinition: ['directives', 'operationTypes'],
-      OperationTypeDefinition: ['type'],
-      ScalarTypeDefinition: ['description', 'name', 'directives'],
-      ObjectTypeDefinition: ['description', 'name', 'interfaces', 'directives', 'fields'],
-      FieldDefinition: ['description', 'name', 'arguments', 'type', 'directives'],
-      InputValueDefinition: ['description', 'name', 'type', 'defaultValue', 'directives'],
-      InterfaceTypeDefinition: ['description', 'name', 'directives', 'fields'],
-      UnionTypeDefinition: ['description', 'name', 'directives', 'types'],
-      EnumTypeDefinition: ['description', 'name', 'directives', 'values'],
-      EnumValueDefinition: ['description', 'name', 'directives'],
-      InputObjectTypeDefinition: ['description', 'name', 'directives', 'fields'],
-      DirectiveDefinition: ['description', 'name', 'arguments', 'locations'],
-      SchemaExtension: ['directives', 'operationTypes'],
-      ScalarTypeExtension: ['name', 'directives'],
-      ObjectTypeExtension: ['name', 'interfaces', 'directives', 'fields'],
-      InterfaceTypeExtension: ['name', 'directives', 'fields'],
-      UnionTypeExtension: ['name', 'directives', 'types'],
-      EnumTypeExtension: ['name', 'directives', 'values'],
-      InputObjectTypeExtension: ['name', 'directives', 'fields']
-    };
-    var BREAK = Object.freeze({});
-    /**
-     * visit() will walk through an AST using a depth first traversal, calling
-     * the visitor's enter function at each node in the traversal, and calling the
-     * leave function after visiting that node and all of its child nodes.
-     *
-     * By returning different values from the enter and leave functions, the
-     * behavior of the visitor can be altered, including skipping over a sub-tree of
-     * the AST (by returning false), editing the AST by returning a value or null
-     * to remove the value, or to stop the whole traversal by returning BREAK.
-     *
-     * When using visit() to edit an AST, the original AST will not be modified, and
-     * a new version of the AST with the changes applied will be returned from the
-     * visit function.
-     *
-     *     const editedAST = visit(ast, {
-     *       enter(node, key, parent, path, ancestors) {
-     *         // @return
-     *         //   undefined: no action
-     *         //   false: skip visiting this node
-     *         //   visitor.BREAK: stop visiting altogether
-     *         //   null: delete this node
-     *         //   any value: replace this node with the returned value
-     *       },
-     *       leave(node, key, parent, path, ancestors) {
-     *         // @return
-     *         //   undefined: no action
-     *         //   false: no action
-     *         //   visitor.BREAK: stop visiting altogether
-     *         //   null: delete this node
-     *         //   any value: replace this node with the returned value
-     *       }
-     *     });
-     *
-     * Alternatively to providing enter() and leave() functions, a visitor can
-     * instead provide functions named the same as the kinds of AST nodes, or
-     * enter/leave visitors at a named key, leading to four permutations of
-     * visitor API:
-     *
-     * 1) Named visitors triggered when entering a node a specific kind.
-     *
-     *     visit(ast, {
-     *       Kind(node) {
-     *         // enter the "Kind" node
-     *       }
-     *     })
-     *
-     * 2) Named visitors that trigger upon entering and leaving a node of
-     *    a specific kind.
-     *
-     *     visit(ast, {
-     *       Kind: {
-     *         enter(node) {
-     *           // enter the "Kind" node
-     *         }
-     *         leave(node) {
-     *           // leave the "Kind" node
-     *         }
-     *       }
-     *     })
-     *
-     * 3) Generic visitors that trigger upon entering and leaving any node.
-     *
-     *     visit(ast, {
-     *       enter(node) {
-     *         // enter any node
-     *       },
-     *       leave(node) {
-     *         // leave any node
-     *       }
-     *     })
-     *
-     * 4) Parallel visitors for entering and leaving nodes of a specific kind.
-     *
-     *     visit(ast, {
-     *       enter: {
-     *         Kind(node) {
-     *           // enter the "Kind" node
-     *         }
-     *       },
-     *       leave: {
-     *         Kind(node) {
-     *           // leave the "Kind" node
-     *         }
-     *       }
-     *     })
-     */
-
-    function visit(root, visitor) {
-      var visitorKeys = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : QueryDocumentKeys;
-
-      /* eslint-disable no-undef-init */
-      var stack = undefined;
-      var inArray = Array.isArray(root);
-      var keys = [root];
-      var index = -1;
-      var edits = [];
-      var node = undefined;
-      var key = undefined;
-      var parent = undefined;
-      var path = [];
-      var ancestors = [];
-      var newRoot = root;
-      /* eslint-enable no-undef-init */
-
-      do {
-        index++;
-        var isLeaving = index === keys.length;
-        var isEdited = isLeaving && edits.length !== 0;
-
-        if (isLeaving) {
-          key = ancestors.length === 0 ? undefined : path[path.length - 1];
-          node = parent;
-          parent = ancestors.pop();
-
-          if (isEdited) {
-            if (inArray) {
-              node = node.slice();
-            } else {
-              var clone = {};
-
-              for (var _i2 = 0, _Object$keys2 = Object.keys(node); _i2 < _Object$keys2.length; _i2++) {
-                var k = _Object$keys2[_i2];
-                clone[k] = node[k];
-              }
-
-              node = clone;
-            }
-
-            var editOffset = 0;
-
-            for (var ii = 0; ii < edits.length; ii++) {
-              var editKey = edits[ii][0];
-              var editValue = edits[ii][1];
-
-              if (inArray) {
-                editKey -= editOffset;
-              }
-
-              if (inArray && editValue === null) {
-                node.splice(editKey, 1);
-                editOffset++;
-              } else {
-                node[editKey] = editValue;
-              }
-            }
-          }
-
-          index = stack.index;
-          keys = stack.keys;
-          edits = stack.edits;
-          inArray = stack.inArray;
-          stack = stack.prev;
-        } else {
-          key = parent ? inArray ? index : keys[index] : undefined;
-          node = parent ? parent[key] : newRoot;
-
-          if (node === null || node === undefined) {
-            continue;
-          }
-
-          if (parent) {
-            path.push(key);
-          }
-        }
-
-        var result = void 0;
-
-        if (!Array.isArray(node)) {
-          if (!isNode(node)) {
-            throw new Error('Invalid AST Node: ' + inspect(node));
-          }
-
-          var visitFn = getVisitFn(visitor, node.kind, isLeaving);
-
-          if (visitFn) {
-            result = visitFn.call(visitor, node, key, parent, path, ancestors);
-
-            if (result === BREAK) {
-              break;
-            }
-
-            if (result === false) {
-              if (!isLeaving) {
-                path.pop();
-                continue;
-              }
-            } else if (result !== undefined) {
-              edits.push([key, result]);
-
-              if (!isLeaving) {
-                if (isNode(result)) {
-                  node = result;
-                } else {
-                  path.pop();
-                  continue;
-                }
-              }
-            }
-          }
-        }
-
-        if (result === undefined && isEdited) {
-          edits.push([key, node]);
-        }
-
-        if (isLeaving) {
-          path.pop();
-        } else {
-          stack = {
-            inArray: inArray,
-            index: index,
-            keys: keys,
-            edits: edits,
-            prev: stack
-          };
-          inArray = Array.isArray(node);
-          keys = inArray ? node : visitorKeys[node.kind] || [];
-          index = -1;
-          edits = [];
-
-          if (parent) {
-            ancestors.push(parent);
-          }
-
-          parent = node;
-        }
-      } while (stack !== undefined);
-
-      if (edits.length !== 0) {
-        newRoot = edits[edits.length - 1][1];
-      }
-
-      return newRoot;
-    }
-
-    function isNode(maybeNode) {
-      return Boolean(maybeNode && typeof maybeNode.kind === 'string');
-    }
-    /**
-     * Given a visitor instance, if it is leaving or not, and a node kind, return
-     * the function the visitor runtime should call.
-     */
-
-    function getVisitFn(visitor, kind, isLeaving) {
-      var kindVisitor = visitor[kind];
-
-      if (kindVisitor) {
-        if (!isLeaving && typeof kindVisitor === 'function') {
-          // { Kind() {} }
-          return kindVisitor;
-        }
-
-        var kindSpecificVisitor = isLeaving ? kindVisitor.leave : kindVisitor.enter;
-
-        if (typeof kindSpecificVisitor === 'function') {
-          // { Kind: { enter() {}, leave() {} } }
-          return kindSpecificVisitor;
-        }
-      } else {
-        var specificVisitor = isLeaving ? visitor.leave : visitor.enter;
-
-        if (specificVisitor) {
-          if (typeof specificVisitor === 'function') {
-            // { enter() {}, leave() {} }
-            return specificVisitor;
-          }
-
-          var specificKindVisitor = specificVisitor[kind];
-
-          if (typeof specificKindVisitor === 'function') {
-            // { enter: { Kind() {} }, leave: { Kind() {} } }
-            return specificKindVisitor;
-          }
-        }
-      }
-    }
-
-    /*! *****************************************************************************
-    Copyright (c) Microsoft Corporation. All rights reserved.
-    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-    this file except in compliance with the License. You may obtain a copy of the
-    License at http://www.apache.org/licenses/LICENSE-2.0
-
-    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-    MERCHANTABLITY OR NON-INFRINGEMENT.
-
-    See the Apache Version 2.0 License for specific language governing permissions
-    and limitations under the License.
-    ***************************************************************************** */
-    /* global Reflect, Promise */
-
-    var extendStatics = function(d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-
-    function __extends(d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    }
-
-    var __assign = function() {
-        __assign = Object.assign || function __assign(t) {
-            for (var s, i = 1, n = arguments.length; i < n; i++) {
-                s = arguments[i];
-                for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-            }
-            return t;
-        };
-        return __assign.apply(this, arguments);
-    };
-
-    function __rest(s, e) {
-        var t = {};
-        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-            t[p] = s[p];
-        if (s != null && typeof Object.getOwnPropertySymbols === "function")
-            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                    t[p[i]] = s[p[i]];
-            }
-        return t;
-    }
-
-    function __awaiter(thisArg, _arguments, P, generator) {
-        return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-        });
-    }
-
-    function __generator(thisArg, body) {
-        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
-        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-        function verb(n) { return function (v) { return step([n, v]); }; }
-        function step(op) {
-            if (f) throw new TypeError("Generator is already executing.");
-            while (_) try {
-                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-                if (y = 0, t) op = [op[0] & 2, t.value];
-                switch (op[0]) {
-                    case 0: case 1: t = op; break;
-                    case 4: _.label++; return { value: op[1], done: false };
-                    case 5: _.label++; y = op[1]; op = [0]; continue;
-                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                    default:
-                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                        if (t[2]) _.ops.pop();
-                        _.trys.pop(); continue;
-                }
-                op = body.call(thisArg, _);
-            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
-        }
-    }
-
-    function __spreadArrays() {
-        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-        for (var r = Array(s), k = 0, i = 0; i < il; i++)
-            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-                r[k] = a[j];
-        return r;
-    }
-
-    var genericMessage = "Invariant Violation";
-    var _a = Object.setPrototypeOf, setPrototypeOf = _a === void 0 ? function (obj, proto) {
-        obj.__proto__ = proto;
-        return obj;
-    } : _a;
-    var InvariantError = /** @class */ (function (_super) {
-        __extends(InvariantError, _super);
-        function InvariantError(message) {
-            if (message === void 0) { message = genericMessage; }
-            var _this = _super.call(this, typeof message === "number"
-                ? genericMessage + ": " + message + " (see https://github.com/apollographql/invariant-packages)"
-                : message) || this;
-            _this.framesToPop = 1;
-            _this.name = genericMessage;
-            setPrototypeOf(_this, InvariantError.prototype);
-            return _this;
-        }
-        return InvariantError;
-    }(Error));
-    function invariant(condition, message) {
-        if (!condition) {
-            throw new InvariantError(message);
-        }
-    }
-    function wrapConsoleMethod(method) {
-        return function () {
-            return console[method].apply(console, arguments);
-        };
-    }
-    (function (invariant) {
-        invariant.warn = wrapConsoleMethod("warn");
-        invariant.error = wrapConsoleMethod("error");
-    })(invariant || (invariant = {}));
-    // Code that uses ts-invariant with rollup-plugin-invariant may want to
-    // import this process stub to avoid errors evaluating process.env.NODE_ENV.
-    // However, because most ESM-to-CJS compilers will rewrite the process import
-    // as tsInvariant.process, which prevents proper replacement by minifiers, we
-    // also attempt to define the stub globally when it is not already defined.
-    var processStub = { env: {} };
-    if (typeof process === "object") {
-        processStub = process;
-    }
-    else
-        try {
-            // Using Function to evaluate this assignment in global scope also escapes
-            // the strict mode of the current module, thereby allowing the assignment.
-            // Inspired by https://github.com/facebook/regenerator/pull/369.
-            Function("stub", "process = stub")(processStub);
-        }
-        catch (atLeastWeTried) {
-            // The assignment can fail if a Content Security Policy heavy-handedly
-            // forbids Function usage. In those environments, developers should take
-            // extra care to replace process.env.NODE_ENV in their production builds,
-            // or define an appropriate global.process polyfill.
-        }
-
-    var fastJsonStableStringify = function (data, opts) {
-        if (!opts) opts = {};
-        if (typeof opts === 'function') opts = { cmp: opts };
-        var cycles = (typeof opts.cycles === 'boolean') ? opts.cycles : false;
-
-        var cmp = opts.cmp && (function (f) {
-            return function (node) {
-                return function (a, b) {
-                    var aobj = { key: a, value: node[a] };
-                    var bobj = { key: b, value: node[b] };
-                    return f(aobj, bobj);
-                };
-            };
-        })(opts.cmp);
-
-        var seen = [];
-        return (function stringify (node) {
-            if (node && node.toJSON && typeof node.toJSON === 'function') {
-                node = node.toJSON();
-            }
-
-            if (node === undefined) return;
-            if (typeof node == 'number') return isFinite(node) ? '' + node : 'null';
-            if (typeof node !== 'object') return JSON.stringify(node);
-
-            var i, out;
-            if (Array.isArray(node)) {
-                out = '[';
-                for (i = 0; i < node.length; i++) {
-                    if (i) out += ',';
-                    out += stringify(node[i]) || 'null';
-                }
-                return out + ']';
-            }
-
-            if (node === null) return 'null';
-
-            if (seen.indexOf(node) !== -1) {
-                if (cycles) return JSON.stringify('__cycle__');
-                throw new TypeError('Converting circular structure to JSON');
-            }
-
-            var seenIndex = seen.push(node) - 1;
-            var keys = Object.keys(node).sort(cmp && cmp(node));
-            out = '';
-            for (i = 0; i < keys.length; i++) {
-                var key = keys[i];
-                var value = stringify(node[key]);
-
-                if (!value) continue;
-                if (out) out += ',';
-                out += JSON.stringify(key) + ':' + value;
-            }
-            seen.splice(seenIndex, 1);
-            return '{' + out + '}';
-        })(data);
-    };
-
-    var _a$1 = Object.prototype, toString = _a$1.toString, hasOwnProperty = _a$1.hasOwnProperty;
-    var previousComparisons = new Map();
-    /**
-     * Performs a deep equality check on two JavaScript values, tolerating cycles.
-     */
-    function equal(a, b) {
-        try {
-            return check(a, b);
-        }
-        finally {
-            previousComparisons.clear();
-        }
-    }
-    function check(a, b) {
-        // If the two values are strictly equal, our job is easy.
-        if (a === b) {
-            return true;
-        }
-        // Object.prototype.toString returns a representation of the runtime type of
-        // the given value that is considerably more precise than typeof.
-        var aTag = toString.call(a);
-        var bTag = toString.call(b);
-        // If the runtime types of a and b are different, they could maybe be equal
-        // under some interpretation of equality, but for simplicity and performance
-        // we just return false instead.
-        if (aTag !== bTag) {
-            return false;
-        }
-        switch (aTag) {
-            case '[object Array]':
-                // Arrays are a lot like other objects, but we can cheaply compare their
-                // lengths as a short-cut before comparing their elements.
-                if (a.length !== b.length)
-                    return false;
-            // Fall through to object case...
-            case '[object Object]': {
-                if (previouslyCompared(a, b))
-                    return true;
-                var aKeys = Object.keys(a);
-                var bKeys = Object.keys(b);
-                // If `a` and `b` have a different number of enumerable keys, they
-                // must be different.
-                var keyCount = aKeys.length;
-                if (keyCount !== bKeys.length)
-                    return false;
-                // Now make sure they have the same keys.
-                for (var k = 0; k < keyCount; ++k) {
-                    if (!hasOwnProperty.call(b, aKeys[k])) {
-                        return false;
-                    }
-                }
-                // Finally, check deep equality of all child properties.
-                for (var k = 0; k < keyCount; ++k) {
-                    var key = aKeys[k];
-                    if (!check(a[key], b[key])) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            case '[object Error]':
-                return a.name === b.name && a.message === b.message;
-            case '[object Number]':
-                // Handle NaN, which is !== itself.
-                if (a !== a)
-                    return b !== b;
-            // Fall through to shared +a === +b case...
-            case '[object Boolean]':
-            case '[object Date]':
-                return +a === +b;
-            case '[object RegExp]':
-            case '[object String]':
-                return a == "" + b;
-            case '[object Map]':
-            case '[object Set]': {
-                if (a.size !== b.size)
-                    return false;
-                if (previouslyCompared(a, b))
-                    return true;
-                var aIterator = a.entries();
-                var isMap = aTag === '[object Map]';
-                while (true) {
-                    var info = aIterator.next();
-                    if (info.done)
-                        break;
-                    // If a instanceof Set, aValue === aKey.
-                    var _a = info.value, aKey = _a[0], aValue = _a[1];
-                    // So this works the same way for both Set and Map.
-                    if (!b.has(aKey)) {
-                        return false;
-                    }
-                    // However, we care about deep equality of values only when dealing
-                    // with Map structures.
-                    if (isMap && !check(aValue, b.get(aKey))) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-        }
-        // Otherwise the values are not equal.
-        return false;
-    }
-    function previouslyCompared(a, b) {
-        // Though cyclic references can make an object graph appear infinite from the
-        // perspective of a depth-first traversal, the graph still contains a finite
-        // number of distinct object references. We use the previousComparisons cache
-        // to avoid comparing the same pair of object references more than once, which
-        // guarantees termination (even if we end up comparing every object in one
-        // graph to every object in the other graph, which is extremely unlikely),
-        // while still allowing weird isomorphic structures (like rings with different
-        // lengths) a chance to pass the equality test.
-        var bSet = previousComparisons.get(a);
-        if (bSet) {
-            // Return true here because we can be sure false will be returned somewhere
-            // else if the objects are not equivalent.
-            if (bSet.has(b))
-                return true;
-        }
-        else {
-            previousComparisons.set(a, bSet = new Set);
-        }
-        bSet.add(b);
-        return false;
-    }
-
-    function isStringValue(value) {
-        return value.kind === 'StringValue';
-    }
-    function isBooleanValue(value) {
-        return value.kind === 'BooleanValue';
-    }
-    function isIntValue(value) {
-        return value.kind === 'IntValue';
-    }
-    function isFloatValue(value) {
-        return value.kind === 'FloatValue';
-    }
-    function isVariable(value) {
-        return value.kind === 'Variable';
-    }
-    function isObjectValue(value) {
-        return value.kind === 'ObjectValue';
-    }
-    function isListValue(value) {
-        return value.kind === 'ListValue';
-    }
-    function isEnumValue(value) {
-        return value.kind === 'EnumValue';
-    }
-    function isNullValue(value) {
-        return value.kind === 'NullValue';
-    }
-    function valueToObjectRepresentation(argObj, name, value, variables) {
-        if (isIntValue(value) || isFloatValue(value)) {
-            argObj[name.value] = Number(value.value);
-        }
-        else if (isBooleanValue(value) || isStringValue(value)) {
-            argObj[name.value] = value.value;
-        }
-        else if (isObjectValue(value)) {
-            var nestedArgObj_1 = {};
-            value.fields.map(function (obj) {
-                return valueToObjectRepresentation(nestedArgObj_1, obj.name, obj.value, variables);
-            });
-            argObj[name.value] = nestedArgObj_1;
-        }
-        else if (isVariable(value)) {
-            var variableValue = (variables || {})[value.name.value];
-            argObj[name.value] = variableValue;
-        }
-        else if (isListValue(value)) {
-            argObj[name.value] = value.values.map(function (listValue) {
-                var nestedArgArrayObj = {};
-                valueToObjectRepresentation(nestedArgArrayObj, name, listValue, variables);
-                return nestedArgArrayObj[name.value];
-            });
-        }
-        else if (isEnumValue(value)) {
-            argObj[name.value] = value.value;
-        }
-        else if (isNullValue(value)) {
-            argObj[name.value] = null;
-        }
-        else {
-            throw process.env.NODE_ENV === "production" ? new InvariantError(17) : new InvariantError("The inline argument \"" + name.value + "\" of kind \"" + value.kind + "\"" +
-                'is not supported. Use variables instead of inline arguments to ' +
-                'overcome this limitation.');
-        }
-    }
-    function storeKeyNameFromField(field, variables) {
-        var directivesObj = null;
-        if (field.directives) {
-            directivesObj = {};
-            field.directives.forEach(function (directive) {
-                directivesObj[directive.name.value] = {};
-                if (directive.arguments) {
-                    directive.arguments.forEach(function (_a) {
-                        var name = _a.name, value = _a.value;
-                        return valueToObjectRepresentation(directivesObj[directive.name.value], name, value, variables);
-                    });
-                }
-            });
-        }
-        var argObj = null;
-        if (field.arguments && field.arguments.length) {
-            argObj = {};
-            field.arguments.forEach(function (_a) {
-                var name = _a.name, value = _a.value;
-                return valueToObjectRepresentation(argObj, name, value, variables);
-            });
-        }
-        return getStoreKeyName(field.name.value, argObj, directivesObj);
-    }
-    var KNOWN_DIRECTIVES = [
-        'connection',
-        'include',
-        'skip',
-        'client',
-        'rest',
-        'export',
-    ];
-    function getStoreKeyName(fieldName, args, directives) {
-        if (directives &&
-            directives['connection'] &&
-            directives['connection']['key']) {
-            if (directives['connection']['filter'] &&
-                directives['connection']['filter'].length > 0) {
-                var filterKeys = directives['connection']['filter']
-                    ? directives['connection']['filter']
-                    : [];
-                filterKeys.sort();
-                var queryArgs_1 = args;
-                var filteredArgs_1 = {};
-                filterKeys.forEach(function (key) {
-                    filteredArgs_1[key] = queryArgs_1[key];
-                });
-                return directives['connection']['key'] + "(" + JSON.stringify(filteredArgs_1) + ")";
-            }
-            else {
-                return directives['connection']['key'];
-            }
-        }
-        var completeFieldName = fieldName;
-        if (args) {
-            var stringifiedArgs = fastJsonStableStringify(args);
-            completeFieldName += "(" + stringifiedArgs + ")";
-        }
-        if (directives) {
-            Object.keys(directives).forEach(function (key) {
-                if (KNOWN_DIRECTIVES.indexOf(key) !== -1)
-                    return;
-                if (directives[key] && Object.keys(directives[key]).length) {
-                    completeFieldName += "@" + key + "(" + JSON.stringify(directives[key]) + ")";
-                }
-                else {
-                    completeFieldName += "@" + key;
-                }
-            });
-        }
-        return completeFieldName;
-    }
-    function argumentsObjectFromField(field, variables) {
-        if (field.arguments && field.arguments.length) {
-            var argObj_1 = {};
-            field.arguments.forEach(function (_a) {
-                var name = _a.name, value = _a.value;
-                return valueToObjectRepresentation(argObj_1, name, value, variables);
-            });
-            return argObj_1;
-        }
-        return null;
-    }
-    function resultKeyNameFromField(field) {
-        return field.alias ? field.alias.value : field.name.value;
-    }
-    function isField(selection) {
-        return selection.kind === 'Field';
-    }
-    function isInlineFragment(selection) {
-        return selection.kind === 'InlineFragment';
-    }
-    function isIdValue(idObject) {
-        return idObject &&
-            idObject.type === 'id' &&
-            typeof idObject.generated === 'boolean';
-    }
-    function toIdValue(idConfig, generated) {
-        if (generated === void 0) { generated = false; }
-        return __assign({ type: 'id', generated: generated }, (typeof idConfig === 'string'
-            ? { id: idConfig, typename: undefined }
-            : idConfig));
-    }
-    function isJsonValue(jsonObject) {
-        return (jsonObject != null &&
-            typeof jsonObject === 'object' &&
-            jsonObject.type === 'json');
-    }
-
-    function getDirectiveInfoFromField(field, variables) {
-        if (field.directives && field.directives.length) {
-            var directiveObj_1 = {};
-            field.directives.forEach(function (directive) {
-                directiveObj_1[directive.name.value] = argumentsObjectFromField(directive, variables);
-            });
-            return directiveObj_1;
-        }
-        return null;
-    }
-    function shouldInclude(selection, variables) {
-        if (variables === void 0) { variables = {}; }
-        return getInclusionDirectives(selection.directives).every(function (_a) {
-            var directive = _a.directive, ifArgument = _a.ifArgument;
-            var evaledValue = false;
-            if (ifArgument.value.kind === 'Variable') {
-                evaledValue = variables[ifArgument.value.name.value];
-                process.env.NODE_ENV === "production" ? invariant(evaledValue !== void 0, 1) : invariant(evaledValue !== void 0, "Invalid variable referenced in @" + directive.name.value + " directive.");
-            }
-            else {
-                evaledValue = ifArgument.value.value;
-            }
-            return directive.name.value === 'skip' ? !evaledValue : evaledValue;
-        });
-    }
-    function getDirectiveNames(doc) {
-        var names = [];
-        visit(doc, {
-            Directive: function (node) {
-                names.push(node.name.value);
-            },
-        });
-        return names;
-    }
-    function hasDirectives(names, doc) {
-        return getDirectiveNames(doc).some(function (name) { return names.indexOf(name) > -1; });
-    }
-    function hasClientExports(document) {
-        return (document &&
-            hasDirectives(['client'], document) &&
-            hasDirectives(['export'], document));
-    }
-    function isInclusionDirective(_a) {
-        var value = _a.name.value;
-        return value === 'skip' || value === 'include';
-    }
-    function getInclusionDirectives(directives) {
-        return directives ? directives.filter(isInclusionDirective).map(function (directive) {
-            var directiveArguments = directive.arguments;
-            var directiveName = directive.name.value;
-            process.env.NODE_ENV === "production" ? invariant(directiveArguments && directiveArguments.length === 1, 2) : invariant(directiveArguments && directiveArguments.length === 1, "Incorrect number of arguments for the @" + directiveName + " directive.");
-            var ifArgument = directiveArguments[0];
-            process.env.NODE_ENV === "production" ? invariant(ifArgument.name && ifArgument.name.value === 'if', 3) : invariant(ifArgument.name && ifArgument.name.value === 'if', "Invalid argument for the @" + directiveName + " directive.");
-            var ifValue = ifArgument.value;
-            process.env.NODE_ENV === "production" ? invariant(ifValue &&
-                (ifValue.kind === 'Variable' || ifValue.kind === 'BooleanValue'), 4) : invariant(ifValue &&
-                (ifValue.kind === 'Variable' || ifValue.kind === 'BooleanValue'), "Argument for the @" + directiveName + " directive must be a variable or a boolean value.");
-            return { directive: directive, ifArgument: ifArgument };
-        }) : [];
-    }
-
-    function getFragmentQueryDocument(document, fragmentName) {
-        var actualFragmentName = fragmentName;
-        var fragments = [];
-        document.definitions.forEach(function (definition) {
-            if (definition.kind === 'OperationDefinition') {
-                throw process.env.NODE_ENV === "production" ? new InvariantError(5) : new InvariantError("Found a " + definition.operation + " operation" + (definition.name ? " named '" + definition.name.value + "'" : '') + ". " +
-                    'No operations are allowed when using a fragment as a query. Only fragments are allowed.');
-            }
-            if (definition.kind === 'FragmentDefinition') {
-                fragments.push(definition);
-            }
-        });
-        if (typeof actualFragmentName === 'undefined') {
-            process.env.NODE_ENV === "production" ? invariant(fragments.length === 1, 6) : invariant(fragments.length === 1, "Found " + fragments.length + " fragments. `fragmentName` must be provided when there is not exactly 1 fragment.");
-            actualFragmentName = fragments[0].name.value;
-        }
-        var query = __assign(__assign({}, document), { definitions: __spreadArrays([
-                {
-                    kind: 'OperationDefinition',
-                    operation: 'query',
-                    selectionSet: {
-                        kind: 'SelectionSet',
-                        selections: [
-                            {
-                                kind: 'FragmentSpread',
-                                name: {
-                                    kind: 'Name',
-                                    value: actualFragmentName,
-                                },
-                            },
-                        ],
-                    },
-                }
-            ], document.definitions) });
-        return query;
-    }
-
-    function assign(target) {
-        var sources = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            sources[_i - 1] = arguments[_i];
-        }
-        sources.forEach(function (source) {
-            if (typeof source === 'undefined' || source === null) {
-                return;
-            }
-            Object.keys(source).forEach(function (key) {
-                target[key] = source[key];
-            });
-        });
-        return target;
-    }
-    function checkDocument(doc) {
-        process.env.NODE_ENV === "production" ? invariant(doc && doc.kind === 'Document', 8) : invariant(doc && doc.kind === 'Document', "Expecting a parsed GraphQL document. Perhaps you need to wrap the query string in a \"gql\" tag? http://docs.apollostack.com/apollo-client/core.html#gql");
-        var operations = doc.definitions
-            .filter(function (d) { return d.kind !== 'FragmentDefinition'; })
-            .map(function (definition) {
-            if (definition.kind !== 'OperationDefinition') {
-                throw process.env.NODE_ENV === "production" ? new InvariantError(9) : new InvariantError("Schema type definitions not allowed in queries. Found: \"" + definition.kind + "\"");
-            }
-            return definition;
-        });
-        process.env.NODE_ENV === "production" ? invariant(operations.length <= 1, 10) : invariant(operations.length <= 1, "Ambiguous GraphQL document: contains " + operations.length + " operations");
-        return doc;
-    }
-    function getOperationDefinition(doc) {
-        checkDocument(doc);
-        return doc.definitions.filter(function (definition) { return definition.kind === 'OperationDefinition'; })[0];
-    }
-    function getOperationName(doc) {
-        return (doc.definitions
-            .filter(function (definition) {
-            return definition.kind === 'OperationDefinition' && definition.name;
-        })
-            .map(function (x) { return x.name.value; })[0] || null);
-    }
-    function getFragmentDefinitions(doc) {
-        return doc.definitions.filter(function (definition) { return definition.kind === 'FragmentDefinition'; });
-    }
-    function getQueryDefinition(doc) {
-        var queryDef = getOperationDefinition(doc);
-        process.env.NODE_ENV === "production" ? invariant(queryDef && queryDef.operation === 'query', 12) : invariant(queryDef && queryDef.operation === 'query', 'Must contain a query definition.');
-        return queryDef;
-    }
-    function getFragmentDefinition(doc) {
-        process.env.NODE_ENV === "production" ? invariant(doc.kind === 'Document', 13) : invariant(doc.kind === 'Document', "Expecting a parsed GraphQL document. Perhaps you need to wrap the query string in a \"gql\" tag? http://docs.apollostack.com/apollo-client/core.html#gql");
-        process.env.NODE_ENV === "production" ? invariant(doc.definitions.length <= 1, 14) : invariant(doc.definitions.length <= 1, 'Fragment must have exactly one definition.');
-        var fragmentDef = doc.definitions[0];
-        process.env.NODE_ENV === "production" ? invariant(fragmentDef.kind === 'FragmentDefinition', 15) : invariant(fragmentDef.kind === 'FragmentDefinition', 'Must be a fragment definition.');
-        return fragmentDef;
-    }
-    function getMainDefinition(queryDoc) {
-        checkDocument(queryDoc);
-        var fragmentDefinition;
-        for (var _i = 0, _a = queryDoc.definitions; _i < _a.length; _i++) {
-            var definition = _a[_i];
-            if (definition.kind === 'OperationDefinition') {
-                var operation = definition.operation;
-                if (operation === 'query' ||
-                    operation === 'mutation' ||
-                    operation === 'subscription') {
-                    return definition;
-                }
-            }
-            if (definition.kind === 'FragmentDefinition' && !fragmentDefinition) {
-                fragmentDefinition = definition;
-            }
-        }
-        if (fragmentDefinition) {
-            return fragmentDefinition;
-        }
-        throw process.env.NODE_ENV === "production" ? new InvariantError(16) : new InvariantError('Expected a parsed GraphQL query with a query, mutation, subscription, or a fragment.');
-    }
-    function createFragmentMap(fragments) {
-        if (fragments === void 0) { fragments = []; }
-        var symTable = {};
-        fragments.forEach(function (fragment) {
-            symTable[fragment.name.value] = fragment;
-        });
-        return symTable;
-    }
-    function getDefaultValues(definition) {
-        if (definition &&
-            definition.variableDefinitions &&
-            definition.variableDefinitions.length) {
-            var defaultValues = definition.variableDefinitions
-                .filter(function (_a) {
-                var defaultValue = _a.defaultValue;
-                return defaultValue;
-            })
-                .map(function (_a) {
-                var variable = _a.variable, defaultValue = _a.defaultValue;
-                var defaultValueObj = {};
-                valueToObjectRepresentation(defaultValueObj, variable.name, defaultValue);
-                return defaultValueObj;
-            });
-            return assign.apply(void 0, __spreadArrays([{}], defaultValues));
-        }
-        return {};
-    }
-
-    function filterInPlace(array, test, context) {
-        var target = 0;
-        array.forEach(function (elem, i) {
-            if (test.call(this, elem, i, array)) {
-                array[target++] = elem;
-            }
-        }, context);
-        array.length = target;
-        return array;
-    }
-
-    var TYPENAME_FIELD = {
-        kind: 'Field',
-        name: {
-            kind: 'Name',
-            value: '__typename',
-        },
-    };
-    function isEmpty(op, fragments) {
-        return op.selectionSet.selections.every(function (selection) {
-            return selection.kind === 'FragmentSpread' &&
-                isEmpty(fragments[selection.name.value], fragments);
-        });
-    }
-    function nullIfDocIsEmpty(doc) {
-        return isEmpty(getOperationDefinition(doc) || getFragmentDefinition(doc), createFragmentMap(getFragmentDefinitions(doc)))
-            ? null
-            : doc;
-    }
-    function getDirectiveMatcher(directives) {
-        return function directiveMatcher(directive) {
-            return directives.some(function (dir) {
-                return (dir.name && dir.name === directive.name.value) ||
-                    (dir.test && dir.test(directive));
-            });
-        };
-    }
-    function removeDirectivesFromDocument(directives, doc) {
-        var variablesInUse = Object.create(null);
-        var variablesToRemove = [];
-        var fragmentSpreadsInUse = Object.create(null);
-        var fragmentSpreadsToRemove = [];
-        var modifiedDoc = nullIfDocIsEmpty(visit(doc, {
-            Variable: {
-                enter: function (node, _key, parent) {
-                    if (parent.kind !== 'VariableDefinition') {
-                        variablesInUse[node.name.value] = true;
-                    }
-                },
-            },
-            Field: {
-                enter: function (node) {
-                    if (directives && node.directives) {
-                        var shouldRemoveField = directives.some(function (directive) { return directive.remove; });
-                        if (shouldRemoveField &&
-                            node.directives &&
-                            node.directives.some(getDirectiveMatcher(directives))) {
-                            if (node.arguments) {
-                                node.arguments.forEach(function (arg) {
-                                    if (arg.value.kind === 'Variable') {
-                                        variablesToRemove.push({
-                                            name: arg.value.name.value,
-                                        });
-                                    }
-                                });
-                            }
-                            if (node.selectionSet) {
-                                getAllFragmentSpreadsFromSelectionSet(node.selectionSet).forEach(function (frag) {
-                                    fragmentSpreadsToRemove.push({
-                                        name: frag.name.value,
-                                    });
-                                });
-                            }
-                            return null;
-                        }
-                    }
-                },
-            },
-            FragmentSpread: {
-                enter: function (node) {
-                    fragmentSpreadsInUse[node.name.value] = true;
-                },
-            },
-            Directive: {
-                enter: function (node) {
-                    if (getDirectiveMatcher(directives)(node)) {
-                        return null;
-                    }
-                },
-            },
-        }));
-        if (modifiedDoc &&
-            filterInPlace(variablesToRemove, function (v) { return !variablesInUse[v.name]; }).length) {
-            modifiedDoc = removeArgumentsFromDocument(variablesToRemove, modifiedDoc);
-        }
-        if (modifiedDoc &&
-            filterInPlace(fragmentSpreadsToRemove, function (fs) { return !fragmentSpreadsInUse[fs.name]; })
-                .length) {
-            modifiedDoc = removeFragmentSpreadFromDocument(fragmentSpreadsToRemove, modifiedDoc);
-        }
-        return modifiedDoc;
-    }
-    function addTypenameToDocument(doc) {
-        return visit(checkDocument(doc), {
-            SelectionSet: {
-                enter: function (node, _key, parent) {
-                    if (parent &&
-                        parent.kind === 'OperationDefinition') {
-                        return;
-                    }
-                    var selections = node.selections;
-                    if (!selections) {
-                        return;
-                    }
-                    var skip = selections.some(function (selection) {
-                        return (isField(selection) &&
-                            (selection.name.value === '__typename' ||
-                                selection.name.value.lastIndexOf('__', 0) === 0));
-                    });
-                    if (skip) {
-                        return;
-                    }
-                    var field = parent;
-                    if (isField(field) &&
-                        field.directives &&
-                        field.directives.some(function (d) { return d.name.value === 'export'; })) {
-                        return;
-                    }
-                    return __assign(__assign({}, node), { selections: __spreadArrays(selections, [TYPENAME_FIELD]) });
-                },
-            },
-        });
-    }
-    var connectionRemoveConfig = {
-        test: function (directive) {
-            var willRemove = directive.name.value === 'connection';
-            if (willRemove) {
-                if (!directive.arguments ||
-                    !directive.arguments.some(function (arg) { return arg.name.value === 'key'; })) {
-                    process.env.NODE_ENV === "production" || invariant.warn('Removing an @connection directive even though it does not have a key. ' +
-                        'You may want to use the key parameter to specify a store key.');
-                }
-            }
-            return willRemove;
-        },
-    };
-    function removeConnectionDirectiveFromDocument(doc) {
-        return removeDirectivesFromDocument([connectionRemoveConfig], checkDocument(doc));
-    }
-    function getArgumentMatcher(config) {
-        return function argumentMatcher(argument) {
-            return config.some(function (aConfig) {
-                return argument.value &&
-                    argument.value.kind === 'Variable' &&
-                    argument.value.name &&
-                    (aConfig.name === argument.value.name.value ||
-                        (aConfig.test && aConfig.test(argument)));
-            });
-        };
-    }
-    function removeArgumentsFromDocument(config, doc) {
-        var argMatcher = getArgumentMatcher(config);
-        return nullIfDocIsEmpty(visit(doc, {
-            OperationDefinition: {
-                enter: function (node) {
-                    return __assign(__assign({}, node), { variableDefinitions: node.variableDefinitions.filter(function (varDef) {
-                            return !config.some(function (arg) { return arg.name === varDef.variable.name.value; });
-                        }) });
-                },
-            },
-            Field: {
-                enter: function (node) {
-                    var shouldRemoveField = config.some(function (argConfig) { return argConfig.remove; });
-                    if (shouldRemoveField) {
-                        var argMatchCount_1 = 0;
-                        node.arguments.forEach(function (arg) {
-                            if (argMatcher(arg)) {
-                                argMatchCount_1 += 1;
-                            }
-                        });
-                        if (argMatchCount_1 === 1) {
-                            return null;
-                        }
-                    }
-                },
-            },
-            Argument: {
-                enter: function (node) {
-                    if (argMatcher(node)) {
-                        return null;
-                    }
-                },
-            },
-        }));
-    }
-    function removeFragmentSpreadFromDocument(config, doc) {
-        function enter(node) {
-            if (config.some(function (def) { return def.name === node.name.value; })) {
-                return null;
-            }
-        }
-        return nullIfDocIsEmpty(visit(doc, {
-            FragmentSpread: { enter: enter },
-            FragmentDefinition: { enter: enter },
-        }));
-    }
-    function getAllFragmentSpreadsFromSelectionSet(selectionSet) {
-        var allFragments = [];
-        selectionSet.selections.forEach(function (selection) {
-            if ((isField(selection) || isInlineFragment(selection)) &&
-                selection.selectionSet) {
-                getAllFragmentSpreadsFromSelectionSet(selection.selectionSet).forEach(function (frag) { return allFragments.push(frag); });
-            }
-            else if (selection.kind === 'FragmentSpread') {
-                allFragments.push(selection);
-            }
-        });
-        return allFragments;
-    }
-    function buildQueryFromSelectionSet(document) {
-        var definition = getMainDefinition(document);
-        var definitionOperation = definition.operation;
-        if (definitionOperation === 'query') {
-            return document;
-        }
-        var modifiedDoc = visit(document, {
-            OperationDefinition: {
-                enter: function (node) {
-                    return __assign(__assign({}, node), { operation: 'query' });
-                },
-            },
-        });
-        return modifiedDoc;
-    }
-    function removeClientSetsFromDocument(document) {
-        checkDocument(document);
-        var modifiedDoc = removeDirectivesFromDocument([
-            {
-                test: function (directive) { return directive.name.value === 'client'; },
-                remove: true,
-            },
-        ], document);
-        if (modifiedDoc) {
-            modifiedDoc = visit(modifiedDoc, {
-                FragmentDefinition: {
-                    enter: function (node) {
-                        if (node.selectionSet) {
-                            var isTypenameOnly = node.selectionSet.selections.every(function (selection) {
-                                return isField(selection) && selection.name.value === '__typename';
-                            });
-                            if (isTypenameOnly) {
-                                return null;
-                            }
-                        }
-                    },
-                },
-            });
-        }
-        return modifiedDoc;
-    }
-
-    var canUseWeakMap = typeof WeakMap === 'function' && !(typeof navigator === 'object' &&
-        navigator.product === 'ReactNative');
-
-    var toString$1 = Object.prototype.toString;
-    function cloneDeep(value) {
-        return cloneDeepHelper(value, new Map());
-    }
-    function cloneDeepHelper(val, seen) {
-        switch (toString$1.call(val)) {
-            case "[object Array]": {
-                if (seen.has(val))
-                    return seen.get(val);
-                var copy_1 = val.slice(0);
-                seen.set(val, copy_1);
-                copy_1.forEach(function (child, i) {
-                    copy_1[i] = cloneDeepHelper(child, seen);
-                });
-                return copy_1;
-            }
-            case "[object Object]": {
-                if (seen.has(val))
-                    return seen.get(val);
-                var copy_2 = Object.create(Object.getPrototypeOf(val));
-                seen.set(val, copy_2);
-                Object.keys(val).forEach(function (key) {
-                    copy_2[key] = cloneDeepHelper(val[key], seen);
-                });
-                return copy_2;
-            }
-            default:
-                return val;
-        }
-    }
-
-    function getEnv() {
-        if (typeof process !== 'undefined' && process.env.NODE_ENV) {
-            return process.env.NODE_ENV;
-        }
-        return 'development';
-    }
-    function isEnv(env) {
-        return getEnv() === env;
-    }
-    function isProduction() {
-        return isEnv('production') === true;
-    }
-    function isDevelopment() {
-        return isEnv('development') === true;
-    }
-    function isTest() {
-        return isEnv('test') === true;
-    }
-
-    function tryFunctionOrLogError(f) {
-        try {
-            return f();
-        }
-        catch (e) {
-            if (console.error) {
-                console.error(e);
-            }
-        }
-    }
-    function graphQLResultHasError(result) {
-        return result.errors && result.errors.length;
-    }
-
-    function deepFreeze(o) {
-        Object.freeze(o);
-        Object.getOwnPropertyNames(o).forEach(function (prop) {
-            if (o[prop] !== null &&
-                (typeof o[prop] === 'object' || typeof o[prop] === 'function') &&
-                !Object.isFrozen(o[prop])) {
-                deepFreeze(o[prop]);
-            }
-        });
-        return o;
-    }
-    function maybeDeepFreeze(obj) {
-        if (isDevelopment() || isTest()) {
-            var symbolIsPolyfilled = typeof Symbol === 'function' && typeof Symbol('') === 'string';
-            if (!symbolIsPolyfilled) {
-                return deepFreeze(obj);
-            }
-        }
-        return obj;
-    }
-
-    var hasOwnProperty$1 = Object.prototype.hasOwnProperty;
-    function mergeDeep() {
-        var sources = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            sources[_i] = arguments[_i];
-        }
-        return mergeDeepArray(sources);
-    }
-    function mergeDeepArray(sources) {
-        var target = sources[0] || {};
-        var count = sources.length;
-        if (count > 1) {
-            var pastCopies = [];
-            target = shallowCopyForMerge(target, pastCopies);
-            for (var i = 1; i < count; ++i) {
-                target = mergeHelper(target, sources[i], pastCopies);
-            }
-        }
-        return target;
-    }
-    function isObject(obj) {
-        return obj !== null && typeof obj === 'object';
-    }
-    function mergeHelper(target, source, pastCopies) {
-        if (isObject(source) && isObject(target)) {
-            if (Object.isExtensible && !Object.isExtensible(target)) {
-                target = shallowCopyForMerge(target, pastCopies);
-            }
-            Object.keys(source).forEach(function (sourceKey) {
-                var sourceValue = source[sourceKey];
-                if (hasOwnProperty$1.call(target, sourceKey)) {
-                    var targetValue = target[sourceKey];
-                    if (sourceValue !== targetValue) {
-                        target[sourceKey] = mergeHelper(shallowCopyForMerge(targetValue, pastCopies), sourceValue, pastCopies);
-                    }
-                }
-                else {
-                    target[sourceKey] = sourceValue;
-                }
-            });
-            return target;
-        }
-        return source;
-    }
-    function shallowCopyForMerge(value, pastCopies) {
-        if (value !== null &&
-            typeof value === 'object' &&
-            pastCopies.indexOf(value) < 0) {
-            if (Array.isArray(value)) {
-                value = value.slice(0);
-            }
-            else {
-                value = __assign({ __proto__: Object.getPrototypeOf(value) }, value);
-            }
-            pastCopies.push(value);
-        }
-        return value;
-    }
-
-    var OBSERVABLE;
-    function isObservable(value) {
-        // Lazy-load Symbol to give polyfills a chance to run
-        if (!OBSERVABLE) {
-            OBSERVABLE =
-                (typeof Symbol === 'function' && Symbol.observable) || '@@observable';
-        }
-        return value && value[OBSERVABLE] && value[OBSERVABLE]() === value;
-    }
-    function deferred(set, initial) {
-        var initialized = initial !== undefined;
-        var resolve;
-        var reject;
-        // Set initial value
-        set(initialized
-            ? initial
-            : new Promise(function (_resolve, _reject) {
-                resolve = _resolve;
-                reject = _reject;
-            }));
-        return {
-            fulfill: function (value) {
-                if (initialized)
-                    return set(Promise.resolve(value));
-                initialized = true;
-                resolve(value);
-            },
-            reject: function (error) {
-                if (initialized)
-                    return set(Promise.reject(error));
-                initialized = true;
-                reject(error);
-            }
-        };
-    }
-
-    var noop$1 = function () { };
-    function observe(observable, initial) {
-        if (!isObservable(observable)) {
-            return readable(observable, noop$1);
-        }
-        return readable(undefined, function (set) {
-            var _a = deferred(set, initial), fulfill = _a.fulfill, reject = _a.reject;
-            var subscription = observable.subscribe({
-                next: function (value) {
-                    fulfill(value);
-                },
-                error: function (err) {
-                    reject(err);
-                }
-            });
-            return function () { return subscription.unsubscribe(); };
-        });
-    }
-
-    var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
-    function setClient(client) {
-        setContext(CLIENT, client);
-    }
-
-    var restoring = typeof WeakSet !== 'undefined' ? new WeakSet() : new Set();
-
-    function query(client, options) {
-        var subscribed = false;
-        var initial_value;
-        // If client is restoring (e.g. from SSR)
-        // attempt synchronous readQuery first (to prevent loading in {#await})
-        if (restoring.has(client)) {
-            try {
-                // undefined = skip initial value (not in cache)
-                initial_value = client.readQuery(options) || undefined;
-                initial_value = { data: initial_value };
-            }
-            catch (err) {
-                // Ignore preload errors
-            }
-        }
-        // Create query and observe,
-        // but don't subscribe directly to avoid firing duplicate value if initialized
-        var observable_query = client.watchQuery(options);
-        var subscribe_to_query = observe(observable_query, initial_value).subscribe;
-        // Wrap the query subscription with a readable to prevent duplicate values
-        var subscribe = readable(initial_value, function (set) {
-            subscribed = true;
-            var skip_duplicate = initial_value !== undefined;
-            var initialized = false;
-            var skipped = false;
-            var unsubscribe = subscribe_to_query(function (value) {
-                if (skip_duplicate && initialized && !skipped) {
-                    skipped = true;
-                }
-                else {
-                    if (!initialized)
-                        initialized = true;
-                    set(value);
-                }
-            });
-            return unsubscribe;
-        }).subscribe;
-        return {
-            subscribe: subscribe,
-            refetch: function (variables) {
-                // If variables have not changed and not subscribed, skip refetch
-                if (!subscribed && equal(variables, observable_query.variables))
-                    return observable_query.result();
-                return observable_query.refetch(variables);
-            },
-            result: function () { return observable_query.result(); },
-            fetchMore: function (options) { return observable_query.fetchMore(options); },
-            setOptions: function (options) { return observable_query.setOptions(options); },
-            updateQuery: function (map) { return observable_query.updateQuery(map); },
-            startPolling: function (interval) { return observable_query.startPolling(interval); },
-            stopPolling: function () { return observable_query.stopPolling(); },
-            subscribeToMore: function (options) { return observable_query.subscribeToMore(options); }
-        };
-    }
-
     function devAssert(condition, message) {
       var booleanCondition = Boolean(condition);
 
@@ -28515,7 +28286,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
      * Takes a Source and a UTF-8 character offset, and returns the corresponding
      * line and column as a SourceLocation.
      */
-    function getLocation(source, position) {
+    function getLocation$1(source, position) {
       var lineRegexp = /\r\n|[\n\r]/g;
       var line = 1;
       var column = position + 1;
@@ -28537,7 +28308,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
      */
 
     function printLocation(location) {
-      return printSourceLocation(location.source, getLocation(location.source, location.start));
+      return printSourceLocation(location.source, getLocation$1(location.source, location.start));
     }
     /**
      * Render a helpful description of the location in the GraphQL Source document.
@@ -28638,12 +28409,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
       if (positions && source) {
         _locations = positions.map(function (pos) {
-          return getLocation(source, pos);
+          return getLocation$1(source, pos);
         });
       } else if (_nodes) {
         _locations = _nodes.reduce(function (list, node) {
           if (node.loc) {
-            list.push(getLocation(node.loc.source, node.loc.start));
+            list.push(getLocation$1(node.loc.source, node.loc.start));
           }
 
           return list;
@@ -31348,18 +31119,2197 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const getProblems = src`
   query getAllProblems {
-    problems {
+    allProblems {
       id
       description
-      testcase
+      testCase
       output
     }
   }
 `;
 
+    const allTests = src`
+  query gett {
+    allTests {
+      id
+      testName
+    }
+  }
+`;
+
     const apolloClient = {
-      getProblems
+      getProblems,
+      allTests
     };
+
+    var QueryDocumentKeys = {
+      Name: [],
+      Document: ['definitions'],
+      OperationDefinition: ['name', 'variableDefinitions', 'directives', 'selectionSet'],
+      VariableDefinition: ['variable', 'type', 'defaultValue', 'directives'],
+      Variable: ['name'],
+      SelectionSet: ['selections'],
+      Field: ['alias', 'name', 'arguments', 'directives', 'selectionSet'],
+      Argument: ['name', 'value'],
+      FragmentSpread: ['name', 'directives'],
+      InlineFragment: ['typeCondition', 'directives', 'selectionSet'],
+      FragmentDefinition: ['name', // Note: fragment variable definitions are experimental and may be changed
+      // or removed in the future.
+      'variableDefinitions', 'typeCondition', 'directives', 'selectionSet'],
+      IntValue: [],
+      FloatValue: [],
+      StringValue: [],
+      BooleanValue: [],
+      NullValue: [],
+      EnumValue: [],
+      ListValue: ['values'],
+      ObjectValue: ['fields'],
+      ObjectField: ['name', 'value'],
+      Directive: ['name', 'arguments'],
+      NamedType: ['name'],
+      ListType: ['type'],
+      NonNullType: ['type'],
+      SchemaDefinition: ['directives', 'operationTypes'],
+      OperationTypeDefinition: ['type'],
+      ScalarTypeDefinition: ['description', 'name', 'directives'],
+      ObjectTypeDefinition: ['description', 'name', 'interfaces', 'directives', 'fields'],
+      FieldDefinition: ['description', 'name', 'arguments', 'type', 'directives'],
+      InputValueDefinition: ['description', 'name', 'type', 'defaultValue', 'directives'],
+      InterfaceTypeDefinition: ['description', 'name', 'directives', 'fields'],
+      UnionTypeDefinition: ['description', 'name', 'directives', 'types'],
+      EnumTypeDefinition: ['description', 'name', 'directives', 'values'],
+      EnumValueDefinition: ['description', 'name', 'directives'],
+      InputObjectTypeDefinition: ['description', 'name', 'directives', 'fields'],
+      DirectiveDefinition: ['description', 'name', 'arguments', 'locations'],
+      SchemaExtension: ['directives', 'operationTypes'],
+      ScalarTypeExtension: ['name', 'directives'],
+      ObjectTypeExtension: ['name', 'interfaces', 'directives', 'fields'],
+      InterfaceTypeExtension: ['name', 'directives', 'fields'],
+      UnionTypeExtension: ['name', 'directives', 'types'],
+      EnumTypeExtension: ['name', 'directives', 'values'],
+      InputObjectTypeExtension: ['name', 'directives', 'fields']
+    };
+    var BREAK = Object.freeze({});
+    /**
+     * visit() will walk through an AST using a depth first traversal, calling
+     * the visitor's enter function at each node in the traversal, and calling the
+     * leave function after visiting that node and all of its child nodes.
+     *
+     * By returning different values from the enter and leave functions, the
+     * behavior of the visitor can be altered, including skipping over a sub-tree of
+     * the AST (by returning false), editing the AST by returning a value or null
+     * to remove the value, or to stop the whole traversal by returning BREAK.
+     *
+     * When using visit() to edit an AST, the original AST will not be modified, and
+     * a new version of the AST with the changes applied will be returned from the
+     * visit function.
+     *
+     *     const editedAST = visit(ast, {
+     *       enter(node, key, parent, path, ancestors) {
+     *         // @return
+     *         //   undefined: no action
+     *         //   false: skip visiting this node
+     *         //   visitor.BREAK: stop visiting altogether
+     *         //   null: delete this node
+     *         //   any value: replace this node with the returned value
+     *       },
+     *       leave(node, key, parent, path, ancestors) {
+     *         // @return
+     *         //   undefined: no action
+     *         //   false: no action
+     *         //   visitor.BREAK: stop visiting altogether
+     *         //   null: delete this node
+     *         //   any value: replace this node with the returned value
+     *       }
+     *     });
+     *
+     * Alternatively to providing enter() and leave() functions, a visitor can
+     * instead provide functions named the same as the kinds of AST nodes, or
+     * enter/leave visitors at a named key, leading to four permutations of
+     * visitor API:
+     *
+     * 1) Named visitors triggered when entering a node a specific kind.
+     *
+     *     visit(ast, {
+     *       Kind(node) {
+     *         // enter the "Kind" node
+     *       }
+     *     })
+     *
+     * 2) Named visitors that trigger upon entering and leaving a node of
+     *    a specific kind.
+     *
+     *     visit(ast, {
+     *       Kind: {
+     *         enter(node) {
+     *           // enter the "Kind" node
+     *         }
+     *         leave(node) {
+     *           // leave the "Kind" node
+     *         }
+     *       }
+     *     })
+     *
+     * 3) Generic visitors that trigger upon entering and leaving any node.
+     *
+     *     visit(ast, {
+     *       enter(node) {
+     *         // enter any node
+     *       },
+     *       leave(node) {
+     *         // leave any node
+     *       }
+     *     })
+     *
+     * 4) Parallel visitors for entering and leaving nodes of a specific kind.
+     *
+     *     visit(ast, {
+     *       enter: {
+     *         Kind(node) {
+     *           // enter the "Kind" node
+     *         }
+     *       },
+     *       leave: {
+     *         Kind(node) {
+     *           // leave the "Kind" node
+     *         }
+     *       }
+     *     })
+     */
+
+    function visit(root, visitor) {
+      var visitorKeys = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : QueryDocumentKeys;
+
+      /* eslint-disable no-undef-init */
+      var stack = undefined;
+      var inArray = Array.isArray(root);
+      var keys = [root];
+      var index = -1;
+      var edits = [];
+      var node = undefined;
+      var key = undefined;
+      var parent = undefined;
+      var path = [];
+      var ancestors = [];
+      var newRoot = root;
+      /* eslint-enable no-undef-init */
+
+      do {
+        index++;
+        var isLeaving = index === keys.length;
+        var isEdited = isLeaving && edits.length !== 0;
+
+        if (isLeaving) {
+          key = ancestors.length === 0 ? undefined : path[path.length - 1];
+          node = parent;
+          parent = ancestors.pop();
+
+          if (isEdited) {
+            if (inArray) {
+              node = node.slice();
+            } else {
+              var clone = {};
+
+              for (var _i2 = 0, _Object$keys2 = Object.keys(node); _i2 < _Object$keys2.length; _i2++) {
+                var k = _Object$keys2[_i2];
+                clone[k] = node[k];
+              }
+
+              node = clone;
+            }
+
+            var editOffset = 0;
+
+            for (var ii = 0; ii < edits.length; ii++) {
+              var editKey = edits[ii][0];
+              var editValue = edits[ii][1];
+
+              if (inArray) {
+                editKey -= editOffset;
+              }
+
+              if (inArray && editValue === null) {
+                node.splice(editKey, 1);
+                editOffset++;
+              } else {
+                node[editKey] = editValue;
+              }
+            }
+          }
+
+          index = stack.index;
+          keys = stack.keys;
+          edits = stack.edits;
+          inArray = stack.inArray;
+          stack = stack.prev;
+        } else {
+          key = parent ? inArray ? index : keys[index] : undefined;
+          node = parent ? parent[key] : newRoot;
+
+          if (node === null || node === undefined) {
+            continue;
+          }
+
+          if (parent) {
+            path.push(key);
+          }
+        }
+
+        var result = void 0;
+
+        if (!Array.isArray(node)) {
+          if (!isNode(node)) {
+            throw new Error('Invalid AST Node: ' + inspect(node));
+          }
+
+          var visitFn = getVisitFn(visitor, node.kind, isLeaving);
+
+          if (visitFn) {
+            result = visitFn.call(visitor, node, key, parent, path, ancestors);
+
+            if (result === BREAK) {
+              break;
+            }
+
+            if (result === false) {
+              if (!isLeaving) {
+                path.pop();
+                continue;
+              }
+            } else if (result !== undefined) {
+              edits.push([key, result]);
+
+              if (!isLeaving) {
+                if (isNode(result)) {
+                  node = result;
+                } else {
+                  path.pop();
+                  continue;
+                }
+              }
+            }
+          }
+        }
+
+        if (result === undefined && isEdited) {
+          edits.push([key, node]);
+        }
+
+        if (isLeaving) {
+          path.pop();
+        } else {
+          stack = {
+            inArray: inArray,
+            index: index,
+            keys: keys,
+            edits: edits,
+            prev: stack
+          };
+          inArray = Array.isArray(node);
+          keys = inArray ? node : visitorKeys[node.kind] || [];
+          index = -1;
+          edits = [];
+
+          if (parent) {
+            ancestors.push(parent);
+          }
+
+          parent = node;
+        }
+      } while (stack !== undefined);
+
+      if (edits.length !== 0) {
+        newRoot = edits[edits.length - 1][1];
+      }
+
+      return newRoot;
+    }
+
+    function isNode(maybeNode) {
+      return Boolean(maybeNode && typeof maybeNode.kind === 'string');
+    }
+    /**
+     * Given a visitor instance, if it is leaving or not, and a node kind, return
+     * the function the visitor runtime should call.
+     */
+
+    function getVisitFn(visitor, kind, isLeaving) {
+      var kindVisitor = visitor[kind];
+
+      if (kindVisitor) {
+        if (!isLeaving && typeof kindVisitor === 'function') {
+          // { Kind() {} }
+          return kindVisitor;
+        }
+
+        var kindSpecificVisitor = isLeaving ? kindVisitor.leave : kindVisitor.enter;
+
+        if (typeof kindSpecificVisitor === 'function') {
+          // { Kind: { enter() {}, leave() {} } }
+          return kindSpecificVisitor;
+        }
+      } else {
+        var specificVisitor = isLeaving ? visitor.leave : visitor.enter;
+
+        if (specificVisitor) {
+          if (typeof specificVisitor === 'function') {
+            // { enter() {}, leave() {} }
+            return specificVisitor;
+          }
+
+          var specificKindVisitor = specificVisitor[kind];
+
+          if (typeof specificKindVisitor === 'function') {
+            // { enter: { Kind() {} }, leave: { Kind() {} } }
+            return specificKindVisitor;
+          }
+        }
+      }
+    }
+
+    /*! *****************************************************************************
+    Copyright (c) Microsoft Corporation. All rights reserved.
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+    this file except in compliance with the License. You may obtain a copy of the
+    License at http://www.apache.org/licenses/LICENSE-2.0
+
+    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+    MERCHANTABLITY OR NON-INFRINGEMENT.
+
+    See the Apache Version 2.0 License for specific language governing permissions
+    and limitations under the License.
+    ***************************************************************************** */
+    /* global Reflect, Promise */
+
+    var extendStatics = function(d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+
+    function __extends(d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    }
+
+    var __assign = function() {
+        __assign = Object.assign || function __assign(t) {
+            for (var s, i = 1, n = arguments.length; i < n; i++) {
+                s = arguments[i];
+                for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+            }
+            return t;
+        };
+        return __assign.apply(this, arguments);
+    };
+
+    function __rest(s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    }
+
+    function __awaiter(thisArg, _arguments, P, generator) {
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    }
+
+    function __generator(thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    }
+
+    function __spreadArrays() {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    }
+
+    var genericMessage = "Invariant Violation";
+    var _a = Object.setPrototypeOf, setPrototypeOf = _a === void 0 ? function (obj, proto) {
+        obj.__proto__ = proto;
+        return obj;
+    } : _a;
+    var InvariantError = /** @class */ (function (_super) {
+        __extends(InvariantError, _super);
+        function InvariantError(message) {
+            if (message === void 0) { message = genericMessage; }
+            var _this = _super.call(this, typeof message === "number"
+                ? genericMessage + ": " + message + " (see https://github.com/apollographql/invariant-packages)"
+                : message) || this;
+            _this.framesToPop = 1;
+            _this.name = genericMessage;
+            setPrototypeOf(_this, InvariantError.prototype);
+            return _this;
+        }
+        return InvariantError;
+    }(Error));
+    function invariant(condition, message) {
+        if (!condition) {
+            throw new InvariantError(message);
+        }
+    }
+    function wrapConsoleMethod(method) {
+        return function () {
+            return console[method].apply(console, arguments);
+        };
+    }
+    (function (invariant) {
+        invariant.warn = wrapConsoleMethod("warn");
+        invariant.error = wrapConsoleMethod("error");
+    })(invariant || (invariant = {}));
+    // Code that uses ts-invariant with rollup-plugin-invariant may want to
+    // import this process stub to avoid errors evaluating process.env.NODE_ENV.
+    // However, because most ESM-to-CJS compilers will rewrite the process import
+    // as tsInvariant.process, which prevents proper replacement by minifiers, we
+    // also attempt to define the stub globally when it is not already defined.
+    var processStub = { env: {} };
+    if (typeof process === "object") {
+        processStub = process;
+    }
+    else
+        try {
+            // Using Function to evaluate this assignment in global scope also escapes
+            // the strict mode of the current module, thereby allowing the assignment.
+            // Inspired by https://github.com/facebook/regenerator/pull/369.
+            Function("stub", "process = stub")(processStub);
+        }
+        catch (atLeastWeTried) {
+            // The assignment can fail if a Content Security Policy heavy-handedly
+            // forbids Function usage. In those environments, developers should take
+            // extra care to replace process.env.NODE_ENV in their production builds,
+            // or define an appropriate global.process polyfill.
+        }
+    //# sourceMappingURL=invariant.esm.js.map
+
+    var fastJsonStableStringify = function (data, opts) {
+        if (!opts) opts = {};
+        if (typeof opts === 'function') opts = { cmp: opts };
+        var cycles = (typeof opts.cycles === 'boolean') ? opts.cycles : false;
+
+        var cmp = opts.cmp && (function (f) {
+            return function (node) {
+                return function (a, b) {
+                    var aobj = { key: a, value: node[a] };
+                    var bobj = { key: b, value: node[b] };
+                    return f(aobj, bobj);
+                };
+            };
+        })(opts.cmp);
+
+        var seen = [];
+        return (function stringify (node) {
+            if (node && node.toJSON && typeof node.toJSON === 'function') {
+                node = node.toJSON();
+            }
+
+            if (node === undefined) return;
+            if (typeof node == 'number') return isFinite(node) ? '' + node : 'null';
+            if (typeof node !== 'object') return JSON.stringify(node);
+
+            var i, out;
+            if (Array.isArray(node)) {
+                out = '[';
+                for (i = 0; i < node.length; i++) {
+                    if (i) out += ',';
+                    out += stringify(node[i]) || 'null';
+                }
+                return out + ']';
+            }
+
+            if (node === null) return 'null';
+
+            if (seen.indexOf(node) !== -1) {
+                if (cycles) return JSON.stringify('__cycle__');
+                throw new TypeError('Converting circular structure to JSON');
+            }
+
+            var seenIndex = seen.push(node) - 1;
+            var keys = Object.keys(node).sort(cmp && cmp(node));
+            out = '';
+            for (i = 0; i < keys.length; i++) {
+                var key = keys[i];
+                var value = stringify(node[key]);
+
+                if (!value) continue;
+                if (out) out += ',';
+                out += JSON.stringify(key) + ':' + value;
+            }
+            seen.splice(seenIndex, 1);
+            return '{' + out + '}';
+        })(data);
+    };
+
+    var _a$1 = Object.prototype, toString = _a$1.toString, hasOwnProperty = _a$1.hasOwnProperty;
+    var previousComparisons = new Map();
+    /**
+     * Performs a deep equality check on two JavaScript values, tolerating cycles.
+     */
+    function equal(a, b) {
+        try {
+            return check(a, b);
+        }
+        finally {
+            previousComparisons.clear();
+        }
+    }
+    function check(a, b) {
+        // If the two values are strictly equal, our job is easy.
+        if (a === b) {
+            return true;
+        }
+        // Object.prototype.toString returns a representation of the runtime type of
+        // the given value that is considerably more precise than typeof.
+        var aTag = toString.call(a);
+        var bTag = toString.call(b);
+        // If the runtime types of a and b are different, they could maybe be equal
+        // under some interpretation of equality, but for simplicity and performance
+        // we just return false instead.
+        if (aTag !== bTag) {
+            return false;
+        }
+        switch (aTag) {
+            case '[object Array]':
+                // Arrays are a lot like other objects, but we can cheaply compare their
+                // lengths as a short-cut before comparing their elements.
+                if (a.length !== b.length)
+                    return false;
+            // Fall through to object case...
+            case '[object Object]': {
+                if (previouslyCompared(a, b))
+                    return true;
+                var aKeys = Object.keys(a);
+                var bKeys = Object.keys(b);
+                // If `a` and `b` have a different number of enumerable keys, they
+                // must be different.
+                var keyCount = aKeys.length;
+                if (keyCount !== bKeys.length)
+                    return false;
+                // Now make sure they have the same keys.
+                for (var k = 0; k < keyCount; ++k) {
+                    if (!hasOwnProperty.call(b, aKeys[k])) {
+                        return false;
+                    }
+                }
+                // Finally, check deep equality of all child properties.
+                for (var k = 0; k < keyCount; ++k) {
+                    var key = aKeys[k];
+                    if (!check(a[key], b[key])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            case '[object Error]':
+                return a.name === b.name && a.message === b.message;
+            case '[object Number]':
+                // Handle NaN, which is !== itself.
+                if (a !== a)
+                    return b !== b;
+            // Fall through to shared +a === +b case...
+            case '[object Boolean]':
+            case '[object Date]':
+                return +a === +b;
+            case '[object RegExp]':
+            case '[object String]':
+                return a == "" + b;
+            case '[object Map]':
+            case '[object Set]': {
+                if (a.size !== b.size)
+                    return false;
+                if (previouslyCompared(a, b))
+                    return true;
+                var aIterator = a.entries();
+                var isMap = aTag === '[object Map]';
+                while (true) {
+                    var info = aIterator.next();
+                    if (info.done)
+                        break;
+                    // If a instanceof Set, aValue === aKey.
+                    var _a = info.value, aKey = _a[0], aValue = _a[1];
+                    // So this works the same way for both Set and Map.
+                    if (!b.has(aKey)) {
+                        return false;
+                    }
+                    // However, we care about deep equality of values only when dealing
+                    // with Map structures.
+                    if (isMap && !check(aValue, b.get(aKey))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+        // Otherwise the values are not equal.
+        return false;
+    }
+    function previouslyCompared(a, b) {
+        // Though cyclic references can make an object graph appear infinite from the
+        // perspective of a depth-first traversal, the graph still contains a finite
+        // number of distinct object references. We use the previousComparisons cache
+        // to avoid comparing the same pair of object references more than once, which
+        // guarantees termination (even if we end up comparing every object in one
+        // graph to every object in the other graph, which is extremely unlikely),
+        // while still allowing weird isomorphic structures (like rings with different
+        // lengths) a chance to pass the equality test.
+        var bSet = previousComparisons.get(a);
+        if (bSet) {
+            // Return true here because we can be sure false will be returned somewhere
+            // else if the objects are not equivalent.
+            if (bSet.has(b))
+                return true;
+        }
+        else {
+            previousComparisons.set(a, bSet = new Set);
+        }
+        bSet.add(b);
+        return false;
+    }
+    //# sourceMappingURL=equality.esm.js.map
+
+    function isStringValue(value) {
+        return value.kind === 'StringValue';
+    }
+    function isBooleanValue(value) {
+        return value.kind === 'BooleanValue';
+    }
+    function isIntValue(value) {
+        return value.kind === 'IntValue';
+    }
+    function isFloatValue(value) {
+        return value.kind === 'FloatValue';
+    }
+    function isVariable(value) {
+        return value.kind === 'Variable';
+    }
+    function isObjectValue(value) {
+        return value.kind === 'ObjectValue';
+    }
+    function isListValue(value) {
+        return value.kind === 'ListValue';
+    }
+    function isEnumValue(value) {
+        return value.kind === 'EnumValue';
+    }
+    function isNullValue(value) {
+        return value.kind === 'NullValue';
+    }
+    function valueToObjectRepresentation(argObj, name, value, variables) {
+        if (isIntValue(value) || isFloatValue(value)) {
+            argObj[name.value] = Number(value.value);
+        }
+        else if (isBooleanValue(value) || isStringValue(value)) {
+            argObj[name.value] = value.value;
+        }
+        else if (isObjectValue(value)) {
+            var nestedArgObj_1 = {};
+            value.fields.map(function (obj) {
+                return valueToObjectRepresentation(nestedArgObj_1, obj.name, obj.value, variables);
+            });
+            argObj[name.value] = nestedArgObj_1;
+        }
+        else if (isVariable(value)) {
+            var variableValue = (variables || {})[value.name.value];
+            argObj[name.value] = variableValue;
+        }
+        else if (isListValue(value)) {
+            argObj[name.value] = value.values.map(function (listValue) {
+                var nestedArgArrayObj = {};
+                valueToObjectRepresentation(nestedArgArrayObj, name, listValue, variables);
+                return nestedArgArrayObj[name.value];
+            });
+        }
+        else if (isEnumValue(value)) {
+            argObj[name.value] = value.value;
+        }
+        else if (isNullValue(value)) {
+            argObj[name.value] = null;
+        }
+        else {
+            throw process.env.NODE_ENV === "production" ? new InvariantError(17) : new InvariantError("The inline argument \"" + name.value + "\" of kind \"" + value.kind + "\"" +
+                'is not supported. Use variables instead of inline arguments to ' +
+                'overcome this limitation.');
+        }
+    }
+    function storeKeyNameFromField(field, variables) {
+        var directivesObj = null;
+        if (field.directives) {
+            directivesObj = {};
+            field.directives.forEach(function (directive) {
+                directivesObj[directive.name.value] = {};
+                if (directive.arguments) {
+                    directive.arguments.forEach(function (_a) {
+                        var name = _a.name, value = _a.value;
+                        return valueToObjectRepresentation(directivesObj[directive.name.value], name, value, variables);
+                    });
+                }
+            });
+        }
+        var argObj = null;
+        if (field.arguments && field.arguments.length) {
+            argObj = {};
+            field.arguments.forEach(function (_a) {
+                var name = _a.name, value = _a.value;
+                return valueToObjectRepresentation(argObj, name, value, variables);
+            });
+        }
+        return getStoreKeyName(field.name.value, argObj, directivesObj);
+    }
+    var KNOWN_DIRECTIVES = [
+        'connection',
+        'include',
+        'skip',
+        'client',
+        'rest',
+        'export',
+    ];
+    function getStoreKeyName(fieldName, args, directives) {
+        if (directives &&
+            directives['connection'] &&
+            directives['connection']['key']) {
+            if (directives['connection']['filter'] &&
+                directives['connection']['filter'].length > 0) {
+                var filterKeys = directives['connection']['filter']
+                    ? directives['connection']['filter']
+                    : [];
+                filterKeys.sort();
+                var queryArgs_1 = args;
+                var filteredArgs_1 = {};
+                filterKeys.forEach(function (key) {
+                    filteredArgs_1[key] = queryArgs_1[key];
+                });
+                return directives['connection']['key'] + "(" + JSON.stringify(filteredArgs_1) + ")";
+            }
+            else {
+                return directives['connection']['key'];
+            }
+        }
+        var completeFieldName = fieldName;
+        if (args) {
+            var stringifiedArgs = fastJsonStableStringify(args);
+            completeFieldName += "(" + stringifiedArgs + ")";
+        }
+        if (directives) {
+            Object.keys(directives).forEach(function (key) {
+                if (KNOWN_DIRECTIVES.indexOf(key) !== -1)
+                    return;
+                if (directives[key] && Object.keys(directives[key]).length) {
+                    completeFieldName += "@" + key + "(" + JSON.stringify(directives[key]) + ")";
+                }
+                else {
+                    completeFieldName += "@" + key;
+                }
+            });
+        }
+        return completeFieldName;
+    }
+    function argumentsObjectFromField(field, variables) {
+        if (field.arguments && field.arguments.length) {
+            var argObj_1 = {};
+            field.arguments.forEach(function (_a) {
+                var name = _a.name, value = _a.value;
+                return valueToObjectRepresentation(argObj_1, name, value, variables);
+            });
+            return argObj_1;
+        }
+        return null;
+    }
+    function resultKeyNameFromField(field) {
+        return field.alias ? field.alias.value : field.name.value;
+    }
+    function isField(selection) {
+        return selection.kind === 'Field';
+    }
+    function isInlineFragment(selection) {
+        return selection.kind === 'InlineFragment';
+    }
+    function isIdValue(idObject) {
+        return idObject &&
+            idObject.type === 'id' &&
+            typeof idObject.generated === 'boolean';
+    }
+    function toIdValue(idConfig, generated) {
+        if (generated === void 0) { generated = false; }
+        return __assign({ type: 'id', generated: generated }, (typeof idConfig === 'string'
+            ? { id: idConfig, typename: undefined }
+            : idConfig));
+    }
+    function isJsonValue(jsonObject) {
+        return (jsonObject != null &&
+            typeof jsonObject === 'object' &&
+            jsonObject.type === 'json');
+    }
+
+    function getDirectiveInfoFromField(field, variables) {
+        if (field.directives && field.directives.length) {
+            var directiveObj_1 = {};
+            field.directives.forEach(function (directive) {
+                directiveObj_1[directive.name.value] = argumentsObjectFromField(directive, variables);
+            });
+            return directiveObj_1;
+        }
+        return null;
+    }
+    function shouldInclude(selection, variables) {
+        if (variables === void 0) { variables = {}; }
+        return getInclusionDirectives(selection.directives).every(function (_a) {
+            var directive = _a.directive, ifArgument = _a.ifArgument;
+            var evaledValue = false;
+            if (ifArgument.value.kind === 'Variable') {
+                evaledValue = variables[ifArgument.value.name.value];
+                process.env.NODE_ENV === "production" ? invariant(evaledValue !== void 0, 1) : invariant(evaledValue !== void 0, "Invalid variable referenced in @" + directive.name.value + " directive.");
+            }
+            else {
+                evaledValue = ifArgument.value.value;
+            }
+            return directive.name.value === 'skip' ? !evaledValue : evaledValue;
+        });
+    }
+    function getDirectiveNames(doc) {
+        var names = [];
+        visit(doc, {
+            Directive: function (node) {
+                names.push(node.name.value);
+            },
+        });
+        return names;
+    }
+    function hasDirectives(names, doc) {
+        return getDirectiveNames(doc).some(function (name) { return names.indexOf(name) > -1; });
+    }
+    function hasClientExports(document) {
+        return (document &&
+            hasDirectives(['client'], document) &&
+            hasDirectives(['export'], document));
+    }
+    function isInclusionDirective(_a) {
+        var value = _a.name.value;
+        return value === 'skip' || value === 'include';
+    }
+    function getInclusionDirectives(directives) {
+        return directives ? directives.filter(isInclusionDirective).map(function (directive) {
+            var directiveArguments = directive.arguments;
+            var directiveName = directive.name.value;
+            process.env.NODE_ENV === "production" ? invariant(directiveArguments && directiveArguments.length === 1, 2) : invariant(directiveArguments && directiveArguments.length === 1, "Incorrect number of arguments for the @" + directiveName + " directive.");
+            var ifArgument = directiveArguments[0];
+            process.env.NODE_ENV === "production" ? invariant(ifArgument.name && ifArgument.name.value === 'if', 3) : invariant(ifArgument.name && ifArgument.name.value === 'if', "Invalid argument for the @" + directiveName + " directive.");
+            var ifValue = ifArgument.value;
+            process.env.NODE_ENV === "production" ? invariant(ifValue &&
+                (ifValue.kind === 'Variable' || ifValue.kind === 'BooleanValue'), 4) : invariant(ifValue &&
+                (ifValue.kind === 'Variable' || ifValue.kind === 'BooleanValue'), "Argument for the @" + directiveName + " directive must be a variable or a boolean value.");
+            return { directive: directive, ifArgument: ifArgument };
+        }) : [];
+    }
+
+    function getFragmentQueryDocument(document, fragmentName) {
+        var actualFragmentName = fragmentName;
+        var fragments = [];
+        document.definitions.forEach(function (definition) {
+            if (definition.kind === 'OperationDefinition') {
+                throw process.env.NODE_ENV === "production" ? new InvariantError(5) : new InvariantError("Found a " + definition.operation + " operation" + (definition.name ? " named '" + definition.name.value + "'" : '') + ". " +
+                    'No operations are allowed when using a fragment as a query. Only fragments are allowed.');
+            }
+            if (definition.kind === 'FragmentDefinition') {
+                fragments.push(definition);
+            }
+        });
+        if (typeof actualFragmentName === 'undefined') {
+            process.env.NODE_ENV === "production" ? invariant(fragments.length === 1, 6) : invariant(fragments.length === 1, "Found " + fragments.length + " fragments. `fragmentName` must be provided when there is not exactly 1 fragment.");
+            actualFragmentName = fragments[0].name.value;
+        }
+        var query = __assign(__assign({}, document), { definitions: __spreadArrays([
+                {
+                    kind: 'OperationDefinition',
+                    operation: 'query',
+                    selectionSet: {
+                        kind: 'SelectionSet',
+                        selections: [
+                            {
+                                kind: 'FragmentSpread',
+                                name: {
+                                    kind: 'Name',
+                                    value: actualFragmentName,
+                                },
+                            },
+                        ],
+                    },
+                }
+            ], document.definitions) });
+        return query;
+    }
+
+    function assign$1(target) {
+        var sources = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            sources[_i - 1] = arguments[_i];
+        }
+        sources.forEach(function (source) {
+            if (typeof source === 'undefined' || source === null) {
+                return;
+            }
+            Object.keys(source).forEach(function (key) {
+                target[key] = source[key];
+            });
+        });
+        return target;
+    }
+    function checkDocument(doc) {
+        process.env.NODE_ENV === "production" ? invariant(doc && doc.kind === 'Document', 8) : invariant(doc && doc.kind === 'Document', "Expecting a parsed GraphQL document. Perhaps you need to wrap the query string in a \"gql\" tag? http://docs.apollostack.com/apollo-client/core.html#gql");
+        var operations = doc.definitions
+            .filter(function (d) { return d.kind !== 'FragmentDefinition'; })
+            .map(function (definition) {
+            if (definition.kind !== 'OperationDefinition') {
+                throw process.env.NODE_ENV === "production" ? new InvariantError(9) : new InvariantError("Schema type definitions not allowed in queries. Found: \"" + definition.kind + "\"");
+            }
+            return definition;
+        });
+        process.env.NODE_ENV === "production" ? invariant(operations.length <= 1, 10) : invariant(operations.length <= 1, "Ambiguous GraphQL document: contains " + operations.length + " operations");
+        return doc;
+    }
+    function getOperationDefinition(doc) {
+        checkDocument(doc);
+        return doc.definitions.filter(function (definition) { return definition.kind === 'OperationDefinition'; })[0];
+    }
+    function getOperationName(doc) {
+        return (doc.definitions
+            .filter(function (definition) {
+            return definition.kind === 'OperationDefinition' && definition.name;
+        })
+            .map(function (x) { return x.name.value; })[0] || null);
+    }
+    function getFragmentDefinitions(doc) {
+        return doc.definitions.filter(function (definition) { return definition.kind === 'FragmentDefinition'; });
+    }
+    function getQueryDefinition(doc) {
+        var queryDef = getOperationDefinition(doc);
+        process.env.NODE_ENV === "production" ? invariant(queryDef && queryDef.operation === 'query', 12) : invariant(queryDef && queryDef.operation === 'query', 'Must contain a query definition.');
+        return queryDef;
+    }
+    function getFragmentDefinition(doc) {
+        process.env.NODE_ENV === "production" ? invariant(doc.kind === 'Document', 13) : invariant(doc.kind === 'Document', "Expecting a parsed GraphQL document. Perhaps you need to wrap the query string in a \"gql\" tag? http://docs.apollostack.com/apollo-client/core.html#gql");
+        process.env.NODE_ENV === "production" ? invariant(doc.definitions.length <= 1, 14) : invariant(doc.definitions.length <= 1, 'Fragment must have exactly one definition.');
+        var fragmentDef = doc.definitions[0];
+        process.env.NODE_ENV === "production" ? invariant(fragmentDef.kind === 'FragmentDefinition', 15) : invariant(fragmentDef.kind === 'FragmentDefinition', 'Must be a fragment definition.');
+        return fragmentDef;
+    }
+    function getMainDefinition(queryDoc) {
+        checkDocument(queryDoc);
+        var fragmentDefinition;
+        for (var _i = 0, _a = queryDoc.definitions; _i < _a.length; _i++) {
+            var definition = _a[_i];
+            if (definition.kind === 'OperationDefinition') {
+                var operation = definition.operation;
+                if (operation === 'query' ||
+                    operation === 'mutation' ||
+                    operation === 'subscription') {
+                    return definition;
+                }
+            }
+            if (definition.kind === 'FragmentDefinition' && !fragmentDefinition) {
+                fragmentDefinition = definition;
+            }
+        }
+        if (fragmentDefinition) {
+            return fragmentDefinition;
+        }
+        throw process.env.NODE_ENV === "production" ? new InvariantError(16) : new InvariantError('Expected a parsed GraphQL query with a query, mutation, subscription, or a fragment.');
+    }
+    function createFragmentMap(fragments) {
+        if (fragments === void 0) { fragments = []; }
+        var symTable = {};
+        fragments.forEach(function (fragment) {
+            symTable[fragment.name.value] = fragment;
+        });
+        return symTable;
+    }
+    function getDefaultValues(definition) {
+        if (definition &&
+            definition.variableDefinitions &&
+            definition.variableDefinitions.length) {
+            var defaultValues = definition.variableDefinitions
+                .filter(function (_a) {
+                var defaultValue = _a.defaultValue;
+                return defaultValue;
+            })
+                .map(function (_a) {
+                var variable = _a.variable, defaultValue = _a.defaultValue;
+                var defaultValueObj = {};
+                valueToObjectRepresentation(defaultValueObj, variable.name, defaultValue);
+                return defaultValueObj;
+            });
+            return assign$1.apply(void 0, __spreadArrays([{}], defaultValues));
+        }
+        return {};
+    }
+
+    function filterInPlace(array, test, context) {
+        var target = 0;
+        array.forEach(function (elem, i) {
+            if (test.call(this, elem, i, array)) {
+                array[target++] = elem;
+            }
+        }, context);
+        array.length = target;
+        return array;
+    }
+
+    var TYPENAME_FIELD = {
+        kind: 'Field',
+        name: {
+            kind: 'Name',
+            value: '__typename',
+        },
+    };
+    function isEmpty(op, fragments) {
+        return op.selectionSet.selections.every(function (selection) {
+            return selection.kind === 'FragmentSpread' &&
+                isEmpty(fragments[selection.name.value], fragments);
+        });
+    }
+    function nullIfDocIsEmpty(doc) {
+        return isEmpty(getOperationDefinition(doc) || getFragmentDefinition(doc), createFragmentMap(getFragmentDefinitions(doc)))
+            ? null
+            : doc;
+    }
+    function getDirectiveMatcher(directives) {
+        return function directiveMatcher(directive) {
+            return directives.some(function (dir) {
+                return (dir.name && dir.name === directive.name.value) ||
+                    (dir.test && dir.test(directive));
+            });
+        };
+    }
+    function removeDirectivesFromDocument(directives, doc) {
+        var variablesInUse = Object.create(null);
+        var variablesToRemove = [];
+        var fragmentSpreadsInUse = Object.create(null);
+        var fragmentSpreadsToRemove = [];
+        var modifiedDoc = nullIfDocIsEmpty(visit(doc, {
+            Variable: {
+                enter: function (node, _key, parent) {
+                    if (parent.kind !== 'VariableDefinition') {
+                        variablesInUse[node.name.value] = true;
+                    }
+                },
+            },
+            Field: {
+                enter: function (node) {
+                    if (directives && node.directives) {
+                        var shouldRemoveField = directives.some(function (directive) { return directive.remove; });
+                        if (shouldRemoveField &&
+                            node.directives &&
+                            node.directives.some(getDirectiveMatcher(directives))) {
+                            if (node.arguments) {
+                                node.arguments.forEach(function (arg) {
+                                    if (arg.value.kind === 'Variable') {
+                                        variablesToRemove.push({
+                                            name: arg.value.name.value,
+                                        });
+                                    }
+                                });
+                            }
+                            if (node.selectionSet) {
+                                getAllFragmentSpreadsFromSelectionSet(node.selectionSet).forEach(function (frag) {
+                                    fragmentSpreadsToRemove.push({
+                                        name: frag.name.value,
+                                    });
+                                });
+                            }
+                            return null;
+                        }
+                    }
+                },
+            },
+            FragmentSpread: {
+                enter: function (node) {
+                    fragmentSpreadsInUse[node.name.value] = true;
+                },
+            },
+            Directive: {
+                enter: function (node) {
+                    if (getDirectiveMatcher(directives)(node)) {
+                        return null;
+                    }
+                },
+            },
+        }));
+        if (modifiedDoc &&
+            filterInPlace(variablesToRemove, function (v) { return !variablesInUse[v.name]; }).length) {
+            modifiedDoc = removeArgumentsFromDocument(variablesToRemove, modifiedDoc);
+        }
+        if (modifiedDoc &&
+            filterInPlace(fragmentSpreadsToRemove, function (fs) { return !fragmentSpreadsInUse[fs.name]; })
+                .length) {
+            modifiedDoc = removeFragmentSpreadFromDocument(fragmentSpreadsToRemove, modifiedDoc);
+        }
+        return modifiedDoc;
+    }
+    function addTypenameToDocument(doc) {
+        return visit(checkDocument(doc), {
+            SelectionSet: {
+                enter: function (node, _key, parent) {
+                    if (parent &&
+                        parent.kind === 'OperationDefinition') {
+                        return;
+                    }
+                    var selections = node.selections;
+                    if (!selections) {
+                        return;
+                    }
+                    var skip = selections.some(function (selection) {
+                        return (isField(selection) &&
+                            (selection.name.value === '__typename' ||
+                                selection.name.value.lastIndexOf('__', 0) === 0));
+                    });
+                    if (skip) {
+                        return;
+                    }
+                    var field = parent;
+                    if (isField(field) &&
+                        field.directives &&
+                        field.directives.some(function (d) { return d.name.value === 'export'; })) {
+                        return;
+                    }
+                    return __assign(__assign({}, node), { selections: __spreadArrays(selections, [TYPENAME_FIELD]) });
+                },
+            },
+        });
+    }
+    var connectionRemoveConfig = {
+        test: function (directive) {
+            var willRemove = directive.name.value === 'connection';
+            if (willRemove) {
+                if (!directive.arguments ||
+                    !directive.arguments.some(function (arg) { return arg.name.value === 'key'; })) {
+                    process.env.NODE_ENV === "production" || invariant.warn('Removing an @connection directive even though it does not have a key. ' +
+                        'You may want to use the key parameter to specify a store key.');
+                }
+            }
+            return willRemove;
+        },
+    };
+    function removeConnectionDirectiveFromDocument(doc) {
+        return removeDirectivesFromDocument([connectionRemoveConfig], checkDocument(doc));
+    }
+    function getArgumentMatcher(config) {
+        return function argumentMatcher(argument) {
+            return config.some(function (aConfig) {
+                return argument.value &&
+                    argument.value.kind === 'Variable' &&
+                    argument.value.name &&
+                    (aConfig.name === argument.value.name.value ||
+                        (aConfig.test && aConfig.test(argument)));
+            });
+        };
+    }
+    function removeArgumentsFromDocument(config, doc) {
+        var argMatcher = getArgumentMatcher(config);
+        return nullIfDocIsEmpty(visit(doc, {
+            OperationDefinition: {
+                enter: function (node) {
+                    return __assign(__assign({}, node), { variableDefinitions: node.variableDefinitions.filter(function (varDef) {
+                            return !config.some(function (arg) { return arg.name === varDef.variable.name.value; });
+                        }) });
+                },
+            },
+            Field: {
+                enter: function (node) {
+                    var shouldRemoveField = config.some(function (argConfig) { return argConfig.remove; });
+                    if (shouldRemoveField) {
+                        var argMatchCount_1 = 0;
+                        node.arguments.forEach(function (arg) {
+                            if (argMatcher(arg)) {
+                                argMatchCount_1 += 1;
+                            }
+                        });
+                        if (argMatchCount_1 === 1) {
+                            return null;
+                        }
+                    }
+                },
+            },
+            Argument: {
+                enter: function (node) {
+                    if (argMatcher(node)) {
+                        return null;
+                    }
+                },
+            },
+        }));
+    }
+    function removeFragmentSpreadFromDocument(config, doc) {
+        function enter(node) {
+            if (config.some(function (def) { return def.name === node.name.value; })) {
+                return null;
+            }
+        }
+        return nullIfDocIsEmpty(visit(doc, {
+            FragmentSpread: { enter: enter },
+            FragmentDefinition: { enter: enter },
+        }));
+    }
+    function getAllFragmentSpreadsFromSelectionSet(selectionSet) {
+        var allFragments = [];
+        selectionSet.selections.forEach(function (selection) {
+            if ((isField(selection) || isInlineFragment(selection)) &&
+                selection.selectionSet) {
+                getAllFragmentSpreadsFromSelectionSet(selection.selectionSet).forEach(function (frag) { return allFragments.push(frag); });
+            }
+            else if (selection.kind === 'FragmentSpread') {
+                allFragments.push(selection);
+            }
+        });
+        return allFragments;
+    }
+    function buildQueryFromSelectionSet(document) {
+        var definition = getMainDefinition(document);
+        var definitionOperation = definition.operation;
+        if (definitionOperation === 'query') {
+            return document;
+        }
+        var modifiedDoc = visit(document, {
+            OperationDefinition: {
+                enter: function (node) {
+                    return __assign(__assign({}, node), { operation: 'query' });
+                },
+            },
+        });
+        return modifiedDoc;
+    }
+    function removeClientSetsFromDocument(document) {
+        checkDocument(document);
+        var modifiedDoc = removeDirectivesFromDocument([
+            {
+                test: function (directive) { return directive.name.value === 'client'; },
+                remove: true,
+            },
+        ], document);
+        if (modifiedDoc) {
+            modifiedDoc = visit(modifiedDoc, {
+                FragmentDefinition: {
+                    enter: function (node) {
+                        if (node.selectionSet) {
+                            var isTypenameOnly = node.selectionSet.selections.every(function (selection) {
+                                return isField(selection) && selection.name.value === '__typename';
+                            });
+                            if (isTypenameOnly) {
+                                return null;
+                            }
+                        }
+                    },
+                },
+            });
+        }
+        return modifiedDoc;
+    }
+
+    var canUseWeakMap = typeof WeakMap === 'function' && !(typeof navigator === 'object' &&
+        navigator.product === 'ReactNative');
+
+    var toString$1 = Object.prototype.toString;
+    function cloneDeep(value) {
+        return cloneDeepHelper(value, new Map());
+    }
+    function cloneDeepHelper(val, seen) {
+        switch (toString$1.call(val)) {
+            case "[object Array]": {
+                if (seen.has(val))
+                    return seen.get(val);
+                var copy_1 = val.slice(0);
+                seen.set(val, copy_1);
+                copy_1.forEach(function (child, i) {
+                    copy_1[i] = cloneDeepHelper(child, seen);
+                });
+                return copy_1;
+            }
+            case "[object Object]": {
+                if (seen.has(val))
+                    return seen.get(val);
+                var copy_2 = Object.create(Object.getPrototypeOf(val));
+                seen.set(val, copy_2);
+                Object.keys(val).forEach(function (key) {
+                    copy_2[key] = cloneDeepHelper(val[key], seen);
+                });
+                return copy_2;
+            }
+            default:
+                return val;
+        }
+    }
+
+    function getEnv() {
+        if (typeof process !== 'undefined' && process.env.NODE_ENV) {
+            return process.env.NODE_ENV;
+        }
+        return 'development';
+    }
+    function isEnv(env) {
+        return getEnv() === env;
+    }
+    function isProduction() {
+        return isEnv('production') === true;
+    }
+    function isDevelopment() {
+        return isEnv('development') === true;
+    }
+    function isTest() {
+        return isEnv('test') === true;
+    }
+
+    function tryFunctionOrLogError(f) {
+        try {
+            return f();
+        }
+        catch (e) {
+            if (console.error) {
+                console.error(e);
+            }
+        }
+    }
+    function graphQLResultHasError(result) {
+        return result.errors && result.errors.length;
+    }
+
+    function deepFreeze(o) {
+        Object.freeze(o);
+        Object.getOwnPropertyNames(o).forEach(function (prop) {
+            if (o[prop] !== null &&
+                (typeof o[prop] === 'object' || typeof o[prop] === 'function') &&
+                !Object.isFrozen(o[prop])) {
+                deepFreeze(o[prop]);
+            }
+        });
+        return o;
+    }
+    function maybeDeepFreeze(obj) {
+        if (isDevelopment() || isTest()) {
+            var symbolIsPolyfilled = typeof Symbol === 'function' && typeof Symbol('') === 'string';
+            if (!symbolIsPolyfilled) {
+                return deepFreeze(obj);
+            }
+        }
+        return obj;
+    }
+
+    var hasOwnProperty$1 = Object.prototype.hasOwnProperty;
+    function mergeDeep() {
+        var sources = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            sources[_i] = arguments[_i];
+        }
+        return mergeDeepArray(sources);
+    }
+    function mergeDeepArray(sources) {
+        var target = sources[0] || {};
+        var count = sources.length;
+        if (count > 1) {
+            var pastCopies = [];
+            target = shallowCopyForMerge(target, pastCopies);
+            for (var i = 1; i < count; ++i) {
+                target = mergeHelper(target, sources[i], pastCopies);
+            }
+        }
+        return target;
+    }
+    function isObject(obj) {
+        return obj !== null && typeof obj === 'object';
+    }
+    function mergeHelper(target, source, pastCopies) {
+        if (isObject(source) && isObject(target)) {
+            if (Object.isExtensible && !Object.isExtensible(target)) {
+                target = shallowCopyForMerge(target, pastCopies);
+            }
+            Object.keys(source).forEach(function (sourceKey) {
+                var sourceValue = source[sourceKey];
+                if (hasOwnProperty$1.call(target, sourceKey)) {
+                    var targetValue = target[sourceKey];
+                    if (sourceValue !== targetValue) {
+                        target[sourceKey] = mergeHelper(shallowCopyForMerge(targetValue, pastCopies), sourceValue, pastCopies);
+                    }
+                }
+                else {
+                    target[sourceKey] = sourceValue;
+                }
+            });
+            return target;
+        }
+        return source;
+    }
+    function shallowCopyForMerge(value, pastCopies) {
+        if (value !== null &&
+            typeof value === 'object' &&
+            pastCopies.indexOf(value) < 0) {
+            if (Array.isArray(value)) {
+                value = value.slice(0);
+            }
+            else {
+                value = __assign({ __proto__: Object.getPrototypeOf(value) }, value);
+            }
+            pastCopies.push(value);
+        }
+        return value;
+    }
+    //# sourceMappingURL=bundle.esm.js.map
+
+    var OBSERVABLE;
+    function isObservable(value) {
+        // Lazy-load Symbol to give polyfills a chance to run
+        if (!OBSERVABLE) {
+            OBSERVABLE =
+                (typeof Symbol === 'function' && Symbol.observable) || '@@observable';
+        }
+        return value && value[OBSERVABLE] && value[OBSERVABLE]() === value;
+    }
+    function deferred(set, initial) {
+        var initialized = initial !== undefined;
+        var resolve;
+        var reject;
+        // Set initial value
+        set(initialized
+            ? initial
+            : new Promise(function (_resolve, _reject) {
+                resolve = _resolve;
+                reject = _reject;
+            }));
+        return {
+            fulfill: function (value) {
+                if (initialized)
+                    return set(Promise.resolve(value));
+                initialized = true;
+                resolve(value);
+            },
+            reject: function (error) {
+                if (initialized)
+                    return set(Promise.reject(error));
+                initialized = true;
+                reject(error);
+            }
+        };
+    }
+
+    var noop$1 = function () { };
+    function observe(observable, initial) {
+        if (!isObservable(observable)) {
+            return readable(observable, noop$1);
+        }
+        return readable(undefined, function (set) {
+            var _a = deferred(set, initial), fulfill = _a.fulfill, reject = _a.reject;
+            var subscription = observable.subscribe({
+                next: function (value) {
+                    fulfill(value);
+                },
+                error: function (err) {
+                    reject(err);
+                }
+            });
+            return function () { return subscription.unsubscribe(); };
+        });
+    }
+    //# sourceMappingURL=svelte-observable.es.js.map
+
+    var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
+    function getClient() {
+        return getContext(CLIENT);
+    }
+    function setClient(client) {
+        setContext(CLIENT, client);
+    }
+
+    var restoring = typeof WeakSet !== 'undefined' ? new WeakSet() : new Set();
+
+    function query(client, options) {
+        var subscribed = false;
+        var initial_value;
+        // If client is restoring (e.g. from SSR)
+        // attempt synchronous readQuery first (to prevent loading in {#await})
+        if (restoring.has(client)) {
+            try {
+                // undefined = skip initial value (not in cache)
+                initial_value = client.readQuery(options) || undefined;
+                initial_value = { data: initial_value };
+            }
+            catch (err) {
+                // Ignore preload errors
+            }
+        }
+        // Create query and observe,
+        // but don't subscribe directly to avoid firing duplicate value if initialized
+        var observable_query = client.watchQuery(options);
+        var subscribe_to_query = observe(observable_query, initial_value).subscribe;
+        // Wrap the query subscription with a readable to prevent duplicate values
+        var subscribe = readable(initial_value, function (set) {
+            subscribed = true;
+            var skip_duplicate = initial_value !== undefined;
+            var initialized = false;
+            var skipped = false;
+            var unsubscribe = subscribe_to_query(function (value) {
+                if (skip_duplicate && initialized && !skipped) {
+                    skipped = true;
+                }
+                else {
+                    if (!initialized)
+                        initialized = true;
+                    set(value);
+                }
+            });
+            return unsubscribe;
+        }).subscribe;
+        return {
+            subscribe: subscribe,
+            refetch: function (variables) {
+                // If variables have not changed and not subscribed, skip refetch
+                if (!subscribed && equal(variables, observable_query.variables))
+                    return observable_query.result();
+                return observable_query.refetch(variables);
+            },
+            result: function () { return observable_query.result(); },
+            fetchMore: function (options) { return observable_query.fetchMore(options); },
+            setOptions: function (options) { return observable_query.setOptions(options); },
+            updateQuery: function (map) { return observable_query.updateQuery(map); },
+            startPolling: function (interval) { return observable_query.startPolling(interval); },
+            stopPolling: function () { return observable_query.stopPolling(); },
+            subscribeToMore: function (options) { return observable_query.subscribeToMore(options); }
+        };
+    }
+    //# sourceMappingURL=svelte-apollo.es.js.map
+
+    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
+    const file$7 = "src/routes/Admin.svelte";
+
+    function get_each_context$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[7] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[10] = list[i];
+    	return child_ctx;
+    }
+
+    // (53:12) {:catch err}
+    function create_catch_block_1(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[6] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Test*/ 1 && t1_value !== (t1_value = /*err*/ ctx[6] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_1.name,
+    		type: "catch",
+    		source: "(53:12) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (49:12) {:then result}
+    function create_then_block_1(ctx) {
+    	let each_1_anchor;
+    	let each_value_1 = /*Test*/ ctx[2].data.allTests;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*Test*/ 4) {
+    				each_value_1 = /*Test*/ ctx[2].data.allTests;
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_1.name,
+    		type: "then",
+    		source: "(49:12) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (50:12) {#each Test.data.allTests as test}
+    function create_each_block_1(ctx) {
+    	let li;
+    	let t_value = /*test*/ ctx[10].testName + "";
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			t = text(t_value);
+    			add_location(li, file$7, 50, 16, 1524);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1.name,
+    		type: "each",
+    		source: "(50:12) {#each Test.data.allTests as test}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (47:26)              Loading...             {:then result}
+    function create_pending_block_1(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_1.name,
+    		type: "pending",
+    		source: "(47:26)              Loading...             {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (74:12) {:catch err}
+    function create_catch_block(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[6] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem*/ 2 && t1_value !== (t1_value = /*err*/ ctx[6] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block.name,
+    		type: "catch",
+    		source: "(74:12) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (70:12) {:then result}
+    function create_then_block(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[5].data.allProblems;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem*/ 2) {
+    				each_value = /*result*/ ctx[5].data.allProblems;
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block.name,
+    		type: "then",
+    		source: "(70:12) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (71:12) {#each result.data.allProblems as prob}
+    function create_each_block$1(ctx) {
+    	let li;
+    	let t_value = /*prob*/ ctx[7].description + "";
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			t = text(t_value);
+    			add_location(li, file$7, 71, 16, 2227);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem*/ 2 && t_value !== (t_value = /*prob*/ ctx[7].description + "")) set_data_dev(t, t_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$1.name,
+    		type: "each",
+    		source: "(71:12) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (68:29)              Loading...             {:then result}
+    function create_pending_block(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block.name,
+    		type: "pending",
+    		source: "(68:29)              Loading...             {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$9(ctx) {
+    	let link;
+    	let t0;
+    	let nav;
+    	let div1;
+    	let div0;
+    	let a0;
+    	let t2;
+    	let div12;
+    	let div6;
+    	let div5;
+    	let div3;
+    	let div2;
+    	let t4;
+    	let ol0;
+    	let promise;
+    	let t5;
+    	let div4;
+    	let a1;
+    	let t7;
+    	let div11;
+    	let div10;
+    	let div8;
+    	let div7;
+    	let t9;
+    	let ol1;
+    	let promise_1;
+    	let t10;
+    	let div9;
+    	let a2;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_1,
+    		then: create_then_block_1,
+    		catch: create_catch_block_1,
+    		value: 5,
+    		error: 6
+    	};
+
+    	handle_promise(promise = /*$Test*/ ctx[0], info);
+
+    	let info_1 = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block,
+    		then: create_then_block,
+    		catch: create_catch_block,
+    		value: 5,
+    		error: 6
+    	};
+
+    	handle_promise(promise_1 = /*$Problem*/ ctx[1], info_1);
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			nav = element("nav");
+    			div1 = element("div");
+    			div0 = element("div");
+    			a0 = element("a");
+    			a0.textContent = "Logout";
+    			t2 = space();
+    			div12 = element("div");
+    			div6 = element("div");
+    			div5 = element("div");
+    			div3 = element("div");
+    			div2 = element("div");
+    			div2.textContent = "Your Tests";
+    			t4 = space();
+    			ol0 = element("ol");
+    			info.block.c();
+    			t5 = space();
+    			div4 = element("div");
+    			a1 = element("a");
+    			a1.textContent = "Add Test";
+    			t7 = space();
+    			div11 = element("div");
+    			div10 = element("div");
+    			div8 = element("div");
+    			div7 = element("div");
+    			div7.textContent = "Your Problems";
+    			t9 = space();
+    			ol1 = element("ol");
+    			info_1.block.c();
+    			t10 = space();
+    			div9 = element("div");
+    			a2 = element("a");
+    			a2.textContent = "Add Problem";
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$7, 7, 1, 270);
+    			attr_dev(a0, "href", "http://server.rajat.local/logout");
+    			attr_dev(a0, "id", "btn");
+    			attr_dev(a0, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-17gezq0");
+    			add_location(a0, file$7, 34, 8, 874);
+    			add_location(div0, file$7, 33, 8, 860);
+    			attr_dev(div1, "class", "w-full block flex-grow lg:items-right");
+    			add_location(div1, file$7, 32, 4, 800);
+    			attr_dev(nav, "class", "flex items-center justify-between flex-wrap bg-teal-500 p-6");
+    			add_location(nav, file$7, 31, 0, 722);
+    			attr_dev(div2, "class", "font-bold text-xl mb-2");
+    			add_location(div2, file$7, 44, 12, 1314);
+    			add_location(ol0, file$7, 45, 12, 1379);
+    			attr_dev(div3, "class", "px-6 py-4");
+    			add_location(div3, file$7, 43, 8, 1278);
+    			attr_dev(a1, "href", "#");
+    			attr_dev(a1, "class", "inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2");
+    			add_location(a1, file$7, 58, 12, 1717);
+    			attr_dev(div4, "class", "px-6 py-4");
+    			add_location(div4, file$7, 57, 8, 1681);
+    			attr_dev(div5, "class", "max-w-lg rounded overflow-hidden shadow-lg");
+    			add_location(div5, file$7, 42, 4, 1213);
+    			attr_dev(div6, "class", "w-1/2 h-12");
+    			add_location(div6, file$7, 41, 0, 1184);
+    			attr_dev(div7, "class", "font-bold text-xl mb-2");
+    			add_location(div7, file$7, 65, 12, 2006);
+    			add_location(ol1, file$7, 66, 12, 2074);
+    			attr_dev(div8, "class", "px-6 py-4");
+    			add_location(div8, file$7, 64, 8, 1970);
+    			attr_dev(a2, "href", "#");
+    			attr_dev(a2, "class", "inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2");
+    			add_location(a2, file$7, 79, 12, 2423);
+    			attr_dev(div9, "class", "px-6 py-4");
+    			add_location(div9, file$7, 78, 8, 2387);
+    			attr_dev(div10, "class", "max-w-lg rounded overflow-hidden shadow-lg");
+    			add_location(div10, file$7, 63, 4, 1905);
+    			attr_dev(div11, "class", "w-1/2 h-12");
+    			add_location(div11, file$7, 62, 0, 1876);
+    			attr_dev(div12, "id", "blk");
+    			attr_dev(div12, "class", "flex mb-4 svelte-17gezq0");
+    			add_location(div12, file$7, 40, 0, 1151);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, nav, anchor);
+    			append_dev(nav, div1);
+    			append_dev(div1, div0);
+    			append_dev(div0, a0);
+    			insert_dev(target, t2, anchor);
+    			insert_dev(target, div12, anchor);
+    			append_dev(div12, div6);
+    			append_dev(div6, div5);
+    			append_dev(div5, div3);
+    			append_dev(div3, div2);
+    			append_dev(div3, t4);
+    			append_dev(div3, ol0);
+    			info.block.m(ol0, info.anchor = null);
+    			info.mount = () => ol0;
+    			info.anchor = null;
+    			append_dev(div5, t5);
+    			append_dev(div5, div4);
+    			append_dev(div4, a1);
+    			append_dev(div12, t7);
+    			append_dev(div12, div11);
+    			append_dev(div11, div10);
+    			append_dev(div10, div8);
+    			append_dev(div8, div7);
+    			append_dev(div8, t9);
+    			append_dev(div8, ol1);
+    			info_1.block.m(ol1, info_1.anchor = null);
+    			info_1.mount = () => ol1;
+    			info_1.anchor = null;
+    			append_dev(div10, t10);
+    			append_dev(div10, div9);
+    			append_dev(div9, a2);
+    		},
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Test*/ 1 && promise !== (promise = /*$Test*/ ctx[0]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[5] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+
+    			info_1.ctx = ctx;
+
+    			if (dirty & /*$Problem*/ 2 && promise_1 !== (promise_1 = /*$Problem*/ ctx[1]) && handle_promise(promise_1, info_1)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[5] = info_1.resolved;
+    				info_1.block.p(child_ctx, dirty);
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(nav);
+    			if (detaching) detach_dev(t2);
+    			if (detaching) detach_dev(div12);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			info_1.block.d();
+    			info_1.token = null;
+    			info_1 = null;
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$9.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$9($$self, $$props, $$invalidate) {
+    	let $Test;
+    	let $Problem;
+    	const client = getClient();
+    	const Test = query(client, { query: apolloClient.allTests });
+    	validate_store(Test, "Test");
+    	component_subscribe($$self, Test, value => $$invalidate(0, $Test = value));
+    	const Problem = query(client, { query: apolloClient.getProblems });
+    	validate_store(Problem, "Problem");
+    	component_subscribe($$self, Problem, value => $$invalidate(1, $Problem = value));
+
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
+    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
+    	};
+
+    	return [$Test, $Problem, Test, Problem];
+    }
+
+    class Admin extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$9, create_fragment$9, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Admin",
+    			options,
+    			id: create_fragment$9.name
+    		});
+    	}
+    }
 
     var Observable_1 = createCommonjsModule(function (module, exports) {
 
@@ -31986,6 +33936,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     var zenObservable = Observable_1.Observable;
 
     var Observable = zenObservable;
+    //# sourceMappingURL=bundle.esm.js.map
 
     function validateOperation(operation) {
         var OPERATION_FIELDS = [
@@ -32071,12 +34022,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function toLink(handler) {
         return typeof handler === 'function' ? new ApolloLink(handler) : handler;
     }
-    function empty() {
+    function empty$1() {
         return new ApolloLink(function () { return Observable.of(); });
     }
     function from(links) {
         if (links.length === 0)
-            return empty();
+            return empty$1();
         return links.map(toLink).reduce(function (x, y) { return x.concat(y); });
     }
     function split(test, left, right) {
@@ -32131,7 +34082,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         ApolloLink.prototype.request = function (operation, forward) {
             throw process.env.NODE_ENV === "production" ? new InvariantError(1) : new InvariantError('request is not implemented');
         };
-        ApolloLink.empty = empty;
+        ApolloLink.empty = empty$1;
         ApolloLink.from = from;
         ApolloLink.split = split;
         ApolloLink.execute = execute;
@@ -32140,6 +34091,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function execute(link, operation) {
         return (link.request(createOperation(operation.context, transformOperation(validateOperation(operation)))) || Observable.of());
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     function symbolObservablePonyfill(root) {
     	var result;
@@ -34274,6 +36226,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloClient;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     /**
      * Converts an AST into a string, using one set of reasonable
@@ -34692,6 +36645,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return fallbackURI || '/graphql';
         }
     };
+    //# sourceMappingURL=bundle.esm.js.map
 
     var createHttpLink = function (linkOptions) {
         if (linkOptions === void 0) { linkOptions = {}; }
@@ -34831,6 +36785,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return HttpLink;
     }(ApolloLink));
+    //# sourceMappingURL=bundle.esm.js.map
 
     function queryFromPojo(obj) {
         var op = {
@@ -34998,6 +36953,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloCache;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     // This currentContext variable will only be used if the makeSlotClass
     // function is called, which happens only if this is the first copy of the
@@ -35137,6 +37093,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }();
 
     var bind = Slot.bind, noContext = Slot.noContext;
+    //# sourceMappingURL=context.esm.js.map
 
     function defaultDispose() { }
     var Cache = /** @class */ (function () {
@@ -35611,6 +37568,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return optimistic;
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     var haveWarned = false;
     function shouldWarn() {
@@ -35763,7 +37721,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         StoreReader.prototype.diffQueryAgainstStore = function (_a) {
             var store = _a.store, query = _a.query, variables = _a.variables, previousResult = _a.previousResult, _b = _a.returnPartialData, returnPartialData = _b === void 0 ? true : _b, _c = _a.rootId, rootId = _c === void 0 ? 'ROOT_QUERY' : _c, fragmentMatcherFunction = _a.fragmentMatcherFunction, config = _a.config;
             var queryDefinition = getQueryDefinition(query);
-            variables = assign({}, getDefaultValues(queryDefinition), variables);
+            variables = assign$1({}, getDefaultValues(queryDefinition), variables);
             var context = {
                 store: store,
                 dataIdFromObject: config && config.dataIdFromObject,
@@ -36093,7 +38051,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
                     context: {
                         store: store,
                         processedData: {},
-                        variables: assign({}, getDefaultValues(operationDefinition), variables),
+                        variables: assign$1({}, getDefaultValues(operationDefinition), variables),
                         dataIdFromObject: dataIdFromObject,
                         fragmentMap: createFragmentMap(getFragmentDefinitions(document)),
                         fragmentMatcherFunction: fragmentMatcherFunction,
@@ -36539,26 +38497,108 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return InMemoryCache;
     }(ApolloCache));
+    //# sourceMappingURL=bundle.esm.js.map
 
     /* src/App.svelte generated by Svelte v3.18.1 */
-    const file$6 = "src/App.svelte";
+    const file$8 = "src/App.svelte";
 
-    function create_fragment$6(ctx) {
+    // (68:0) <Router>
+    function create_default_slot(ctx) {
+    	let div;
+    	let t0;
+    	let t1;
+    	let current;
+
+    	const route0 = new Route({
+    			props: { path: "/admin", component: Admin },
+    			$$inline: true
+    		});
+
+    	const route1 = new Route({
+    			props: { path: "/home", component: Home },
+    			$$inline: true
+    		});
+
+    	const route2 = new Route({
+    			props: { path: "/", component: Admin },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			create_component(route0.$$.fragment);
+    			t0 = space();
+    			create_component(route1.$$.fragment);
+    			t1 = space();
+    			create_component(route2.$$.fragment);
+    			add_location(div, file$8, 68, 2, 2116);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			mount_component(route0, div, null);
+    			append_dev(div, t0);
+    			mount_component(route1, div, null);
+    			append_dev(div, t1);
+    			mount_component(route2, div, null);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(route0.$$.fragment, local);
+    			transition_in(route1.$$.fragment, local);
+    			transition_in(route2.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(route0.$$.fragment, local);
+    			transition_out(route1.$$.fragment, local);
+    			transition_out(route2.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_component(route0);
+    			destroy_component(route1);
+    			destroy_component(route2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot.name,
+    		type: "slot",
+    		source: "(68:0) <Router>",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$a(ctx) {
     	let div;
     	let t;
     	let current;
     	let dispose;
     	const tabs = new Tabs({ $$inline: true });
-    	const editorarea = new EditorArea({ $$inline: true });
+
+    	const router = new Router({
+    			props: {
+    				$$slots: { default: [create_default_slot] },
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
 
     	const block = {
     		c: function create() {
     			div = element("div");
     			create_component(tabs.$$.fragment);
     			t = space();
-    			create_component(editorarea.$$.fragment);
+    			create_component(router.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$6, 59, 0, 1869);
+    			add_location(div, file$8, 64, 0, 2052);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36567,34 +38607,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div, anchor);
     			mount_component(tabs, div, null);
     			insert_dev(target, t, anchor);
-    			mount_component(editorarea, target, anchor);
+    			mount_component(router, target, anchor);
     			current = true;
     			dispose = listen_dev(window, "keydown", /*keydown_handler*/ ctx[6], false, false, false);
     		},
-    		p: noop,
+    		p: function update(ctx, [dirty]) {
+    			const router_changes = {};
+
+    			if (dirty & /*$$scope*/ 128) {
+    				router_changes.$$scope = { dirty, ctx };
+    			}
+
+    			router.$set(router_changes);
+    		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(tabs.$$.fragment, local);
-    			transition_in(editorarea.$$.fragment, local);
+    			transition_in(router.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(tabs.$$.fragment, local);
-    			transition_out(editorarea.$$.fragment, local);
+    			transition_out(router.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div);
     			destroy_component(tabs);
     			if (detaching) detach_dev(t);
-    			destroy_component(editorarea, detaching);
+    			destroy_component(router, detaching);
     			dispose();
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$6.name,
+    		id: create_fragment$a.name,
     		type: "component",
     		source: "",
     		ctx
@@ -36603,13 +38651,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$6($$self, $$props, $$invalidate) {
+    function instance$a($$self, $$props, $$invalidate) {
     	let $currentTab;
     	let $dataStore;
     	validate_store(currentTab, "currentTab");
     	component_subscribe($$self, currentTab, $$value => $$invalidate(0, $currentTab = $$value));
     	validate_store(dataStore, "dataStore");
     	component_subscribe($$self, dataStore, $$value => $$invalidate(1, $dataStore = $$value));
+    	
     	const cache = new InMemoryCache();
     	const link = new HttpLink({ uri: "http://localhost:4000/" });
     	const client = new ApolloClient({ link, cache });
@@ -36671,13 +38720,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$6, create_fragment$6, safe_not_equal, {});
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$6.name
+    			id: create_fragment$a.name
     		});
     	}
     }

@@ -1,19 +1,26 @@
-import {setClient} from "svelte-apollo";
 import gql from 'graphql-tag';
-
-
 
 const getProblems = gql`
   query getAllProblems {
-    problems {
+    allProblems {
       id
       description
-      testcase
+      testCase
       output
     }
   }
 `;
 
+const allTests = gql`
+  query gett {
+    allTests {
+      id
+      testName
+    }
+  }
+`;
+
 export const apolloClient = {
-  getProblems
+  getProblems,
+  allTests
 };

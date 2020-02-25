@@ -1,4 +1,9 @@
 <script>
+
+  import { Router, Link, Route } from "svelte-routing";
+  import Home from "./Home.svelte";
+  import Admin from "./routes/Admin.svelte";;
+  import Login from "./routes/Login.svelte"
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
@@ -60,5 +65,10 @@
 <div class="flex flex-col w-full">
   <Tabs />
 </div>
-
-<EditorArea />
+<Router>
+  <div>
+    <Route path="/admin" component="{Admin}" />
+    <Route path="/home" component="{Home}"/>
+    <Route path="/" component="{Admin}"/>
+  </div>
+</Router>
