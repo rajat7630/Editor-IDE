@@ -62,13 +62,10 @@
       dataStore.deleteTab(id);
     }
   }} />
-<div class="flex flex-col w-full">
-  <Tabs />
-</div>
 <Router>
   <div>
     <Route path="/admin" component="{Admin}" />
     <Route path="/home" component="{Home}"/>
-    <Route path="/" component="{Admin}"/>
+    <Route path="/" component="{Login}"/>
   </div>
 </Router>
