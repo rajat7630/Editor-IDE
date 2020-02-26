@@ -45,9 +45,17 @@ const Problem= query(client, {query:apolloClient.getProblems});
     <div class="max-w-lg rounded overflow-hidden shadow-lg">
         <div class="px-6 py-4">
             <div class="font-bold text-xl mb-2">Your Tests</div>
-            <p class="text-gray-700 text-base">
-            Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatibus quia, nulla! Maiores et perferendis eaque, exercitationem praesentium nihil.
-            </p>
+            <ol>
+            {#await $Test}
+            Loading...
+            {:then result}
+            {#each Test.data.allTests as test}
+                <li>{test.testName}</li>
+            {/each}
+            {:catch err}
+            Error: {err}
+            {/await}
+            </ol>
         </div>
         <div class="px-6 py-4" style="margin-right:5%;">
              <button class="modal-open bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full">Add Test</button>  
@@ -57,11 +65,19 @@ const Problem= query(client, {query:apolloClient.getProblems});
     </div>
 <div class="w-1/2 h-12">
     <div class="max-w-lg rounded overflow-hidden shadow-lg">
-        <div class="px-6 py-4">
+         <div class="px-6 py-4">
             <div class="font-bold text-xl mb-2">Your Problems</div>
-            <p class="text-gray-700 text-base">
-            Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatibus quia, nulla! Maiores et perferendis eaque, exercitationem praesentium nihil.
-            </p>
+            <ol>
+            {#await $Problem}
+            Loading...
+            {:then result}
+            {#each result.data.allProblems as prob}
+                <li>{prob.description}</li>
+            {/each}
+            {:catch err}
+            Error: {err}
+            {/await}
+            </ol>
         </div>
         <div class="px-6 py-4" style="margin-right:10%;">
            <button class="modal-open1 bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full">Add Problem</button>  
