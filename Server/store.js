@@ -1,5 +1,5 @@
 
-const { User, Admin, Tests, Problems,Attempts } = require('../models/schema')
+const { User, Admin, Tests, Problems,Attempts } = require('./models/schema')
 
 
 
@@ -64,9 +64,9 @@ async function testReducer(test) {
   const author = await Admin.query().findById(`${test.a_id}`);
 
 
-  const problem = await client.query(
-    `SELECT * FROM  Problems INNER JOIN test_info ON test_info.problemid=id WHERE test_info.testid=${test.id}`
-  );
+  // const problem = await client.query(
+  //   `SELECT * FROM  Problems INNER JOIN test_info ON test_info.problemid=id WHERE test_info.testid=${test.id}`
+  // );
 
   const problem = await Problems.query().findById(`${prob.a_id}`);
 
@@ -121,7 +121,6 @@ async function getProblemsByAuthor(id) {
 }
 module.exports = {
   getAllProblems,
-  client,
   getProblemById,
   getAllTests,
   getTestByAuthor,
