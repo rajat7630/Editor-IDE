@@ -1,4 +1,4 @@
-const Knex = require('knex')
+const Knex = require('knex')({client: 'postgresql'}) 
 const connection = require('../knexfile')
 const { Model } = require('objection')
 
