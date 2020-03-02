@@ -1,5 +1,4 @@
 <script>
-
   import { Router, Link, Route } from "svelte-routing";
   import Home from "./Home.svelte";
   import Admin from "./routes/Admin.svelte";;
@@ -17,7 +16,7 @@
   import gql from "graphql-tag";
   const cache = new InMemoryCache();
   const link = new HttpLink({
-    uri: "http://localhost:4000/"
+    uri: "http://localhost:3000/"
   });
   const client = new ApolloClient({
     link,

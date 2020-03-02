@@ -2,6 +2,7 @@
 import { apolloClient } from "../apolloClient.js";
 import { getClient, query } from "svelte-apollo";
 import TestModal from "../components/testmodal_component.svelte";
+import ProblemModal from "../components/problemmodal_component.svelte";
 const client= getClient();
 const Test= query(client, {query:apolloClient.allTests});
 const Problem= query(client, {query:apolloClient.getProblems});
@@ -34,7 +35,7 @@ const Problem= query(client, {query:apolloClient.getProblems});
 <nav class="flex items-center justify-between flex-wrap bg-teal-500 p-6">
     <div class="w-full block flex-grow lg:items-right">
         <div>
-        <a href="http://server.rajat.local/logout" id="btn" class="inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0">Logout</a>
+        <a href="http://localhost:3000/logout" id="btn" class="inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0">Logout</a>
         </div>
     </div>
 </nav>
@@ -80,8 +81,8 @@ const Problem= query(client, {query:apolloClient.getProblems});
             </ol>
         </div>
         <div class="px-6 py-4" style="margin-right:10%;">
-           <button class="modal-open1 bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full">Add Problem</button>  
-             <TestModal/> 
+           <button class="modal-opent bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full">Add Problem</button>  
+             <ProblemModal/> 
             </div>
         </div>
 </div>
@@ -100,13 +101,7 @@ const Problem= query(client, {query:apolloClient.getProblems});
       })
     }
     
-    // var openmodal1 = document.querySelectorAll('.modal-open1')
-    // for (let i=0;i<openmodal1.length;i++) {
-    //     openmodal1[i].addEventListener('click',function(event){
-    //         event.preventDefault()
-    //         toggleModal()
-    //     })
-    // }
+
     const overlay = document.querySelector('.modal-overlay')
     overlay.addEventListener('click', toggleModal)
     
@@ -136,8 +131,54 @@ const Problem= query(client, {query:apolloClient.getProblems});
       modal.classList.toggle('pointer-events-none')
       body.classList.toggle('modal-active')
     }
+
+    // End of Test Modal
+
+
+     //Problem Modal
+    var openmodalt = document.querySelectorAll('.modal-opent')
+    for (var i = 0; i < openmodalt.length; i++) {
+      openmodalt[i].addEventListener('click', function(event){
+    	event.preventDefault()
+    	toggleModalt()
+      })
+    }
     
+
+    const overlayt = document.querySelector('.modal-overlayt')
+    overlayt.addEventListener('click', toggleModalt)
+    
+    var closemodalt = document.querySelectorAll('.modal-closet')
+    for (var i = 0; i < closemodalt.length; i++) {
+      closemodalt[i].addEventListener('click', toggleModalt)
+    }
+    
+    document.onkeydown = function(evt) {
+      evt = evt || window.event
+      var isEscape = false
+      if ("key" in evt) {
+    	isEscape = (evt.key === "Escape" || evt.key === "Esc")
+      } else {
+    	isEscape = (evt.keyCode === 27)
+      }
+      if (isEscape && document.body.classList.contains('modal-active')) {
+    	toggleModalt()
+      }
+    };
+    
+    
+    function toggleModalt () {
+      const body = document.querySelector('body')
+      const modal = document.querySelector('.modalt')
+      modal.classList.toggle('opacity-0')
+      modal.classList.toggle('pointer-events-none')
+      body.classList.toggle('modal-active')
+    }
+
+    // End of Problem Modal
      
   </script>
+
+
 
 </body>

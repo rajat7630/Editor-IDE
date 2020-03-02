@@ -3,7 +3,7 @@ class ProblemAPI extends RestDataSource{
     constructor()
     {
         super();
-        this.baseURL='http://server.rajat.local/'
+        this.baseURL='http://localhost:5000/'
     }
 
     async getAllProblems(){

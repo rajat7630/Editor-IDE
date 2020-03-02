@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const { ApolloServer, gql } = require('apollo-server-express');
 const cors = require('cors');
-const { User, Admin, Tests, Problems,Attempts } = require('./models/schema')
 const app = express();
 app.use(cors());
 app.use(bodyParser());
@@ -44,16 +44,12 @@ app.get('/', (req, res) => {
 //   } else console.log(res.rows[0], 'hellllooooooooo');
 // });
 // Setting up of apollo server
-const { ApolloServer } = require('apollo-server');
 const typeDefs = require('./schema.js');
 const resolvers = require('./resolver.js');
-const apolloServer = new ApolloServer({
-  typeDefs,
+const server = new ApolloServer({ typeDefs, resolvers });
 
-  resolvers
-});
-apolloServer.listen();
+server.applyMiddleware({ app });
 
-app.listen(3000, () => {
-  console.log('app started');
-});
+app.listen({ port: 3000 }, () =>
+  console.log(`🚀 Server ready at http://localhost:3000${server.graphqlPath}`)
+);

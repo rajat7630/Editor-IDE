@@ -8,7 +8,7 @@ var GoogleStrategy = require("passport-google-oauth").OAuth2Strategy;passport.se
   {
    clientID: "97647585806-m8rk8ctonrqtoeojvk9chs531ecmqomu.apps.googleusercontent.com",
    clientSecret: "GyhQz03Fmomzs07LknBA7asI",
-   callbackURL: "http://client.rajat.local/auth/google/callback"
+   callbackURL: "http://localhost:3000/auth/google/callback"
   },
   function(accessToken, refreshToken, profile, done) {
    var userData = {

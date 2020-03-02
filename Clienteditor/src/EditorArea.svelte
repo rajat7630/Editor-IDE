@@ -8,7 +8,7 @@
   $: height = "40vh";
 
   function runHandler() {
-    fetch("http://server.rajat.local/result/" + $currentTab.id, {
+    fetch("http://localhost:5000/result/" + $currentTab.id, {
       method:"GET"
     })
     .then(res=>{
