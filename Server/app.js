@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const { User, Admin, Tests, Problems,Attempts } = require('./models/schema')
 const app = express();
 app.use(cors());
 app.use(bodyParser());
@@ -36,12 +37,12 @@ app.get('/', (req, res) => {
 });
 
 //setting up of database
-const Store = require('./store.js');
-Store.client.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.log(err);
-  } else console.log(res.rows[0], 'hellllooooooooo');
-});
+// const Store = require('./store.js');
+// Store.client.query('SELECT NOW()', (err, res) => {
+//   if (err) {
+//     console.log(err);
+//   } else console.log(res.rows[0], 'hellllooooooooo');
+// });
 // Setting up of apollo server
 const { ApolloServer } = require('apollo-server');
 const typeDefs = require('./schema.js');
