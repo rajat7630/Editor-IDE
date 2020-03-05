@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const { ApolloServer, gql } = require('apollo-server-express');
 const cors = require('cors');
 const app = express();
 app.use(cors());
@@ -18,35 +19,19 @@ app.get('/', (req, res) => {
 });
 
 //setting up of database
-const Store = require('./store.js');
-Store.client.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.log(err);
-  } else console.log(res.rows[0], 'hellllooooooooo');
-});
+// const Store = require('./store.js');
+// Store.client.query('SELECT NOW()', (err, res) => {
+//   if (err) {
+//     console.log(err);
+//   } else console.log(res.rows[0], 'hellllooooooooo');
+// });
 // Setting up of apollo server
-const { ApolloServer } = require('apollo-server');
 const typeDefs = require('./schema.js');
 const resolvers = require('./resolver.js');
-const apolloServer = new ApolloServer({
-  typeDefs,
+const server = new ApolloServer({ typeDefs, resolvers });
 
-  resolvers
-});
-apolloServer.listen();
+server.applyMiddleware({ app });
 
-//Setting up of knex
-const knex= require("knex")({
-    client: "pg",
-    connection:{
-      host:'127.0.0.1',
-      user: 'postgres',
-      password:'newPassword',
-      database:'tryout'
-    }
-})
-
-
-app.listen(3000, () => {
-  console.log('app started');
-});
+app.listen({ port: 3000 }, () =>
+  console.log(`🚀 Server ready at http://localhost:3000${server.graphqlPath}`)
+);

@@ -52,13 +52,13 @@ router.get(
         redis.print
         );
 
-		res.redirect("http://client.rajat.local/admin?token=" + token);
+		res.redirect("http://localhost:5000/admin?token=" + token);
 	}
 );
 
 router.get('/logout', function(req, res){
     req.logout();
-    res.redirect('http://client.rajat.local');
+    res.redirect('http://localhost:5000');
   });
 
 

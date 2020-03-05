@@ -100,6 +100,9 @@ var app = (function () {
     function element(name) {
         return document.createElement(name);
     }
+    function svg_element(name) {
+        return document.createElementNS('http://www.w3.org/2000/svg', name);
+    }
     function text(data) {
         return document.createTextNode(data);
     }
@@ -26673,7 +26676,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       },
     ]);
     function updateData() {
-      fetch('http://server.rajat.local/allData', {
+      fetch('http://localhost:3000/allData', {
         method: 'GET',
       })
         .then(res => {
@@ -26707,7 +26710,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         test_output: '[]',
         solution: 'function solution() { return 1; }',
       };
-      fetch('http://server.rajat.local/addNewProblem', {
+      fetch('http://localhost:3000/addNewProblem', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -26730,7 +26733,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function newProblemData(id, newData) {
-      fetch('http://server.rajat.local/problem/' + id, {
+      fetch('http://localhost:3000/problem/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -26754,7 +26757,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateSolution(id, solution) {
-      fetch('http://server.rajat.local/updateSolution/' + id, {
+      fetch('http://localhost:3000/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -26774,7 +26777,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateTestInput(id, value) {
-      fetch('http://server.rajat.local/updateSolution/' + id, {
+      fetch('http://localhost:3000/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -26794,7 +26797,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function updateTestOutput(id, value) {
-      fetch('http://server.rajat.local/updateSolution/' + id, {
+      fetch('http://localhost:3000/updateSolution/' + id, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -26825,7 +26828,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function deleteTab(id) {
-      fetch('http://server.rajat.local/problem/' + id, {
+      fetch('http://localhost:3000/problem/' + id, {
         method: 'DELETE',
       }).then(res => {
         return update$1(tabs => {
@@ -27436,7 +27439,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			h1 = element("h1");
     			t = text(t_value);
     			attr_dev(h1, "class", "question px-3 py-3 svelte-o9pd4q");
-    			add_location(h1, file$4, 81, 4, 1554);
+    			add_location(h1, file$4, 81, 4, 1550);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -27558,21 +27561,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div0, "class", "w-full bg-gray-800 cursor-move text-bg-600 flex justify-center\n    text-3xl h-3");
     			set_style(div0, "line-height", "1px");
     			set_style(div0, "cursor", "ns-resize");
-    			add_location(div0, file$4, 84, 2, 1641);
+    			add_location(div0, file$4, 84, 2, 1637);
     			attr_dev(button, "class", "runButton svelte-o9pd4q");
-    			add_location(button, file$4, 92, 4, 1912);
+    			add_location(button, file$4, 92, 4, 1908);
     			attr_dev(h2, "class", "text-3xl text-center title svelte-o9pd4q");
-    			add_location(h2, file$4, 93, 4, 1983);
+    			add_location(h2, file$4, 93, 4, 1979);
     			attr_dev(div1, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-o9pd4q");
-    			add_location(div1, file$4, 94, 4, 2038);
+    			add_location(div1, file$4, 94, 4, 2034);
     			attr_dev(div2, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-o9pd4q");
-    			add_location(div2, file$4, 97, 4, 2141);
+    			add_location(div2, file$4, 97, 4, 2137);
     			attr_dev(div3, "class", "output svelte-o9pd4q");
     			attr_dev(div3, "id", "outputid");
     			set_style(div3, "height", /*height*/ ctx[3]);
-    			add_location(div3, file$4, 91, 2, 1849);
+    			add_location(div3, file$4, 91, 2, 1845);
     			attr_dev(div4, "class", "mainDiv flex flex-col svelte-o9pd4q");
-    			add_location(div4, file$4, 68, 0, 1244);
+    			add_location(div4, file$4, 68, 0, 1240);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -27676,7 +27679,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dragging = false;
 
     	function runHandler() {
-    		fetch("http://server.rajat.local/result/" + $currentTab.id, { method: "GET" }).then(res => {
+    		fetch("http://localhost:5000/result/" + $currentTab.id, { method: "GET" }).then(res => {
     			return res.json();
     		}).then(data => {
     			$$invalidate(0, outputData = data.output);
@@ -32707,8 +32710,748 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
     }
 
+    /* src/components/testmodal_component.svelte generated by Svelte v3.18.1 */
+
+    const file$7 = "src/components/testmodal_component.svelte";
+
+    function create_fragment$9(ctx) {
+    	let div16;
+    	let div0;
+    	let t0;
+    	let div15;
+    	let div1;
+    	let svg0;
+    	let path0;
+    	let t1;
+    	let span0;
+    	let t3;
+    	let div14;
+    	let div3;
+    	let p;
+    	let t5;
+    	let div2;
+    	let svg1;
+    	let path1;
+    	let t6;
+    	let form;
+    	let div6;
+    	let div4;
+    	let label0;
+    	let t8;
+    	let div5;
+    	let input0;
+    	let t9;
+    	let div9;
+    	let div7;
+    	let label1;
+    	let t11;
+    	let div8;
+    	let textarea;
+    	let t12;
+    	let div12;
+    	let div10;
+    	let label2;
+    	let t14;
+    	let div11;
+    	let label3;
+    	let input1;
+    	let t15;
+    	let span1;
+    	let t17;
+    	let label4;
+    	let input2;
+    	let t18;
+    	let span2;
+    	let t20;
+    	let label5;
+    	let input3;
+    	let t21;
+    	let span3;
+    	let t23;
+    	let div13;
+    	let button0;
+    	let t25;
+    	let button1;
+
+    	const block = {
+    		c: function create() {
+    			div16 = element("div");
+    			div0 = element("div");
+    			t0 = space();
+    			div15 = element("div");
+    			div1 = element("div");
+    			svg0 = svg_element("svg");
+    			path0 = svg_element("path");
+    			t1 = space();
+    			span0 = element("span");
+    			span0.textContent = "(Esc)";
+    			t3 = space();
+    			div14 = element("div");
+    			div3 = element("div");
+    			p = element("p");
+    			p.textContent = "Add New Test";
+    			t5 = space();
+    			div2 = element("div");
+    			svg1 = svg_element("svg");
+    			path1 = svg_element("path");
+    			t6 = space();
+    			form = element("form");
+    			div6 = element("div");
+    			div4 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Test Name";
+    			t8 = space();
+    			div5 = element("div");
+    			input0 = element("input");
+    			t9 = space();
+    			div9 = element("div");
+    			div7 = element("div");
+    			label1 = element("label");
+    			label1.textContent = "Problems";
+    			t11 = space();
+    			div8 = element("div");
+    			textarea = element("textarea");
+    			t12 = space();
+    			div12 = element("div");
+    			div10 = element("div");
+    			label2 = element("label");
+    			label2.textContent = "Difficulty Type";
+    			t14 = space();
+    			div11 = element("div");
+    			label3 = element("label");
+    			input1 = element("input");
+    			t15 = space();
+    			span1 = element("span");
+    			span1.textContent = "Easy";
+    			t17 = space();
+    			label4 = element("label");
+    			input2 = element("input");
+    			t18 = space();
+    			span2 = element("span");
+    			span2.textContent = "Medium";
+    			t20 = space();
+    			label5 = element("label");
+    			input3 = element("input");
+    			t21 = space();
+    			span3 = element("span");
+    			span3.textContent = "Hard";
+    			t23 = space();
+    			div13 = element("div");
+    			button0 = element("button");
+    			button0.textContent = "Action";
+    			t25 = space();
+    			button1 = element("button");
+    			button1.textContent = "Close";
+    			attr_dev(div0, "class", "modal-overlay absolute w-full h-full bg-gray-900 opacity-50");
+    			add_location(div0, file$7, 3, 4, 134);
+    			attr_dev(path0, "d", "M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z");
+    			add_location(path0, file$7, 9, 8, 595);
+    			attr_dev(svg0, "class", "fill-current text-white");
+    			attr_dev(svg0, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg0, "width", "18");
+    			attr_dev(svg0, "height", "18");
+    			attr_dev(svg0, "viewBox", "0 0 18 18");
+    			add_location(svg0, file$7, 8, 8, 471);
+    			attr_dev(span0, "class", "text-sm");
+    			add_location(span0, file$7, 11, 8, 751);
+    			attr_dev(div1, "class", "modal-close absolute top-0 right-0 cursor-pointer flex flex-col items-center mt-4 mr-4 text-white text-sm z-50");
+    			add_location(div1, file$7, 7, 4, 338);
+    			attr_dev(p, "class", "text-2xl font-bold");
+    			add_location(p, file$7, 18, 8, 1019);
+    			attr_dev(path1, "d", "M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z");
+    			add_location(path1, file$7, 21, 12, 1260);
+    			attr_dev(svg1, "class", "fill-current text-black");
+    			attr_dev(svg1, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg1, "width", "18");
+    			attr_dev(svg1, "height", "18");
+    			attr_dev(svg1, "viewBox", "0 0 18 18");
+    			add_location(svg1, file$7, 20, 12, 1132);
+    			attr_dev(div2, "class", "modal-close cursor-pointer z-50");
+    			add_location(div2, file$7, 19, 8, 1074);
+    			attr_dev(div3, "class", "flex justify-between items-center pb-3");
+    			add_location(div3, file$7, 17, 8, 958);
+    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label0, "for", "inline-full-name");
+    			add_location(label0, file$7, 30, 4, 1576);
+    			attr_dev(div4, "class", "md:w-1/3");
+    			add_location(div4, file$7, 29, 4, 1549);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(input0, "id", "inline-full-name");
+    			attr_dev(input0, "type", "text");
+    			input0.value = "Test Name";
+    			add_location(input0, file$7, 35, 4, 1750);
+    			attr_dev(div5, "class", "md:w-2/3");
+    			add_location(div5, file$7, 34, 4, 1723);
+    			attr_dev(div6, "class", "md:flex md:items-center mb-6");
+    			add_location(div6, file$7, 28, 0, 1502);
+    			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label1, "for", "inline-username");
+    			add_location(label1, file$7, 40, 4, 2074);
+    			attr_dev(div7, "class", "md:w-1/3");
+    			add_location(div7, file$7, 39, 4, 2047);
+    			attr_dev(textarea, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(textarea, "id", "inline-username");
+    			attr_dev(textarea, "type", "text-area");
+    			attr_dev(textarea, "placeholder", "Test Statement");
+    			add_location(textarea, file$7, 45, 4, 2246);
+    			attr_dev(div8, "class", "md:w-2/3");
+    			add_location(div8, file$7, 44, 4, 2219);
+    			attr_dev(div9, "class", "md:flex md:items-center mb-6");
+    			add_location(div9, file$7, 38, 0, 2000);
+    			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label2, "for", "inline-username");
+    			add_location(label2, file$7, 50, 4, 2597);
+    			attr_dev(div10, "class", "md:w-1/3");
+    			add_location(div10, file$7, 49, 2, 2570);
+    			attr_dev(input1, "type", "radio");
+    			attr_dev(input1, "class", "form-radio");
+    			attr_dev(input1, "name", "difficultyType");
+    			input1.value = "easy";
+    			add_location(input1, file$7, 56, 6, 2821);
+    			attr_dev(span1, "class", "ml-2 text-gray-500");
+    			add_location(span1, file$7, 57, 6, 2902);
+    			attr_dev(label3, "class", "inline-flex items-center");
+    			add_location(label3, file$7, 55, 4, 2774);
+    			attr_dev(input2, "type", "radio");
+    			attr_dev(input2, "class", "form-radio");
+    			attr_dev(input2, "name", "difficultyType");
+    			input2.value = "medium";
+    			add_location(input2, file$7, 60, 6, 3016);
+    			attr_dev(span2, "class", "ml-2 text-gray-500");
+    			add_location(span2, file$7, 61, 6, 3099);
+    			attr_dev(label4, "class", "inline-flex items-center ml-6");
+    			add_location(label4, file$7, 59, 4, 2964);
+    			attr_dev(input3, "type", "radio");
+    			attr_dev(input3, "class", "form-radio");
+    			attr_dev(input3, "name", "difficultyType");
+    			input3.value = "hard";
+    			add_location(input3, file$7, 64, 6, 3215);
+    			attr_dev(span3, "class", "ml-2 text-gray-500");
+    			add_location(span3, file$7, 65, 6, 3296);
+    			attr_dev(label5, "class", "inline-flex items-center ml-6");
+    			add_location(label5, file$7, 63, 4, 3163);
+    			attr_dev(div11, "class", "md:w-2/3");
+    			add_location(div11, file$7, 54, 2, 2747);
+    			attr_dev(div12, "class", "md:flex md:items-center mb-6");
+    			add_location(div12, file$7, 48, 0, 2525);
+    			attr_dev(form, "class", "w-full max-w-md");
+    			add_location(form, file$7, 27, 8, 1471);
+    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500 hover:bg-gray-100 hover:text-indigo-400 mr-2");
+    			add_location(button0, file$7, 74, 8, 3454);
+    			attr_dev(button1, "class", "modal-close px-4 bg-indigo-500 p-3 rounded-lg text-white hover:bg-indigo-400");
+    			add_location(button1, file$7, 75, 8, 3590);
+    			attr_dev(div13, "class", "flex justify-end pt-2");
+    			add_location(div13, file$7, 73, 8, 3410);
+    			attr_dev(div14, "class", "modal-content py-4 text-left px-6");
+    			add_location(div14, file$7, 15, 4, 881);
+    			attr_dev(div15, "class", "modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto");
+    			add_location(div15, file$7, 5, 4, 223);
+    			attr_dev(div16, "class", "modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center");
+    			add_location(div16, file$7, 2, 0, 14);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div16, anchor);
+    			append_dev(div16, div0);
+    			append_dev(div16, t0);
+    			append_dev(div16, div15);
+    			append_dev(div15, div1);
+    			append_dev(div1, svg0);
+    			append_dev(svg0, path0);
+    			append_dev(div1, t1);
+    			append_dev(div1, span0);
+    			append_dev(div15, t3);
+    			append_dev(div15, div14);
+    			append_dev(div14, div3);
+    			append_dev(div3, p);
+    			append_dev(div3, t5);
+    			append_dev(div3, div2);
+    			append_dev(div2, svg1);
+    			append_dev(svg1, path1);
+    			append_dev(div14, t6);
+    			append_dev(div14, form);
+    			append_dev(form, div6);
+    			append_dev(div6, div4);
+    			append_dev(div4, label0);
+    			append_dev(div6, t8);
+    			append_dev(div6, div5);
+    			append_dev(div5, input0);
+    			append_dev(form, t9);
+    			append_dev(form, div9);
+    			append_dev(div9, div7);
+    			append_dev(div7, label1);
+    			append_dev(div9, t11);
+    			append_dev(div9, div8);
+    			append_dev(div8, textarea);
+    			append_dev(form, t12);
+    			append_dev(form, div12);
+    			append_dev(div12, div10);
+    			append_dev(div10, label2);
+    			append_dev(div12, t14);
+    			append_dev(div12, div11);
+    			append_dev(div11, label3);
+    			append_dev(label3, input1);
+    			append_dev(label3, t15);
+    			append_dev(label3, span1);
+    			append_dev(div11, t17);
+    			append_dev(div11, label4);
+    			append_dev(label4, input2);
+    			append_dev(label4, t18);
+    			append_dev(label4, span2);
+    			append_dev(div11, t20);
+    			append_dev(div11, label5);
+    			append_dev(label5, input3);
+    			append_dev(label5, t21);
+    			append_dev(label5, span3);
+    			append_dev(div14, t23);
+    			append_dev(div14, div13);
+    			append_dev(div13, button0);
+    			append_dev(div13, t25);
+    			append_dev(div13, button1);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div16);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$9.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    class Testmodal_component extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, null, create_fragment$9, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Testmodal_component",
+    			options,
+    			id: create_fragment$9.name
+    		});
+    	}
+    }
+
+    /* src/components/problemmodal_component.svelte generated by Svelte v3.18.1 */
+
+    const file$8 = "src/components/problemmodal_component.svelte";
+
+    function create_fragment$a(ctx) {
+    	let div22;
+    	let div0;
+    	let t0;
+    	let div21;
+    	let div1;
+    	let svg0;
+    	let path0;
+    	let t1;
+    	let span0;
+    	let t3;
+    	let div20;
+    	let div3;
+    	let p;
+    	let t5;
+    	let div2;
+    	let svg1;
+    	let path1;
+    	let t6;
+    	let form;
+    	let div6;
+    	let div4;
+    	let label0;
+    	let t8;
+    	let div5;
+    	let input0;
+    	let t9;
+    	let div9;
+    	let div7;
+    	let label1;
+    	let t11;
+    	let div8;
+    	let textarea0;
+    	let t12;
+    	let div12;
+    	let div10;
+    	let label2;
+    	let t14;
+    	let div11;
+    	let textarea1;
+    	let t15;
+    	let div15;
+    	let div13;
+    	let label3;
+    	let t17;
+    	let div14;
+    	let textarea2;
+    	let t18;
+    	let div18;
+    	let div16;
+    	let label4;
+    	let t20;
+    	let div17;
+    	let label5;
+    	let input1;
+    	let t21;
+    	let span1;
+    	let t23;
+    	let label6;
+    	let input2;
+    	let t24;
+    	let span2;
+    	let t26;
+    	let label7;
+    	let input3;
+    	let t27;
+    	let span3;
+    	let t29;
+    	let div19;
+    	let button0;
+    	let t31;
+    	let button1;
+
+    	const block = {
+    		c: function create() {
+    			div22 = element("div");
+    			div0 = element("div");
+    			t0 = space();
+    			div21 = element("div");
+    			div1 = element("div");
+    			svg0 = svg_element("svg");
+    			path0 = svg_element("path");
+    			t1 = space();
+    			span0 = element("span");
+    			span0.textContent = "(Esc)";
+    			t3 = space();
+    			div20 = element("div");
+    			div3 = element("div");
+    			p = element("p");
+    			p.textContent = "Add New Problem";
+    			t5 = space();
+    			div2 = element("div");
+    			svg1 = svg_element("svg");
+    			path1 = svg_element("path");
+    			t6 = space();
+    			form = element("form");
+    			div6 = element("div");
+    			div4 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Problem Name";
+    			t8 = space();
+    			div5 = element("div");
+    			input0 = element("input");
+    			t9 = space();
+    			div9 = element("div");
+    			div7 = element("div");
+    			label1 = element("label");
+    			label1.textContent = "Problem Description";
+    			t11 = space();
+    			div8 = element("div");
+    			textarea0 = element("textarea");
+    			t12 = space();
+    			div12 = element("div");
+    			div10 = element("div");
+    			label2 = element("label");
+    			label2.textContent = "Test Cases";
+    			t14 = space();
+    			div11 = element("div");
+    			textarea1 = element("textarea");
+    			t15 = space();
+    			div15 = element("div");
+    			div13 = element("div");
+    			label3 = element("label");
+    			label3.textContent = "Output";
+    			t17 = space();
+    			div14 = element("div");
+    			textarea2 = element("textarea");
+    			t18 = space();
+    			div18 = element("div");
+    			div16 = element("div");
+    			label4 = element("label");
+    			label4.textContent = "Difficulty Type";
+    			t20 = space();
+    			div17 = element("div");
+    			label5 = element("label");
+    			input1 = element("input");
+    			t21 = space();
+    			span1 = element("span");
+    			span1.textContent = "Easy";
+    			t23 = space();
+    			label6 = element("label");
+    			input2 = element("input");
+    			t24 = space();
+    			span2 = element("span");
+    			span2.textContent = "Medium";
+    			t26 = space();
+    			label7 = element("label");
+    			input3 = element("input");
+    			t27 = space();
+    			span3 = element("span");
+    			span3.textContent = "Hard";
+    			t29 = space();
+    			div19 = element("div");
+    			button0 = element("button");
+    			button0.textContent = "Action";
+    			t31 = space();
+    			button1 = element("button");
+    			button1.textContent = "Close";
+    			attr_dev(div0, "class", "modal-overlayt absolute w-full h-full bg-gray-900 opacity-50");
+    			add_location(div0, file$8, 3, 4, 135);
+    			attr_dev(path0, "d", "M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z");
+    			add_location(path0, file$8, 9, 8, 598);
+    			attr_dev(svg0, "class", "fill-current text-white");
+    			attr_dev(svg0, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg0, "width", "18");
+    			attr_dev(svg0, "height", "18");
+    			attr_dev(svg0, "viewBox", "0 0 18 18");
+    			add_location(svg0, file$8, 8, 8, 474);
+    			attr_dev(span0, "class", "text-sm");
+    			add_location(span0, file$8, 11, 8, 754);
+    			attr_dev(div1, "class", "modal-closet absolute top-0 right-0 cursor-pointer flex flex-col items-center mt-4 mr-4 text-white text-sm z-50");
+    			add_location(div1, file$8, 7, 4, 340);
+    			attr_dev(p, "class", "text-2xl font-bold");
+    			add_location(p, file$8, 18, 8, 1022);
+    			attr_dev(path1, "d", "M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z");
+    			add_location(path1, file$8, 21, 12, 1267);
+    			attr_dev(svg1, "class", "fill-current text-black");
+    			attr_dev(svg1, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg1, "width", "18");
+    			attr_dev(svg1, "height", "18");
+    			attr_dev(svg1, "viewBox", "0 0 18 18");
+    			add_location(svg1, file$8, 20, 12, 1139);
+    			attr_dev(div2, "class", "modal-closet cursor-pointer z-50");
+    			add_location(div2, file$8, 19, 8, 1080);
+    			attr_dev(div3, "class", "flex justify-between items-center pb-3");
+    			add_location(div3, file$8, 17, 8, 961);
+    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label0, "for", "inline-full-name");
+    			add_location(label0, file$8, 30, 4, 1583);
+    			attr_dev(div4, "class", "md:w-1/3");
+    			add_location(div4, file$8, 29, 4, 1556);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(input0, "id", "inline-full-name");
+    			attr_dev(input0, "type", "text");
+    			input0.value = "Problem Name";
+    			add_location(input0, file$8, 35, 4, 1760);
+    			attr_dev(div5, "class", "md:w-2/3");
+    			add_location(div5, file$8, 34, 4, 1733);
+    			attr_dev(div6, "class", "md:flex md:items-center mb-6");
+    			add_location(div6, file$8, 28, 0, 1509);
+    			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label1, "for", "inline-username");
+    			add_location(label1, file$8, 40, 4, 2087);
+    			attr_dev(div7, "class", "md:w-1/3");
+    			add_location(div7, file$8, 39, 4, 2060);
+    			attr_dev(textarea0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(textarea0, "id", "inline-username");
+    			attr_dev(textarea0, "type", "text-area");
+    			attr_dev(textarea0, "placeholder", "Problem Statement");
+    			add_location(textarea0, file$8, 45, 4, 2270);
+    			attr_dev(div8, "class", "md:w-2/3");
+    			add_location(div8, file$8, 44, 4, 2243);
+    			attr_dev(div9, "class", "md:flex md:items-center mb-6");
+    			add_location(div9, file$8, 38, 0, 2013);
+    			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label2, "for", "inline-username");
+    			add_location(label2, file$8, 50, 4, 2626);
+    			attr_dev(div10, "class", "md:w-1/3");
+    			add_location(div10, file$8, 49, 4, 2599);
+    			attr_dev(textarea1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(textarea1, "id", "inline-username");
+    			attr_dev(textarea1, "type", "text-area");
+    			attr_dev(textarea1, "placeholder", "eg : [1,3]");
+    			add_location(textarea1, file$8, 55, 4, 2800);
+    			attr_dev(div11, "class", "md:w-2/3");
+    			add_location(div11, file$8, 54, 4, 2773);
+    			attr_dev(div12, "class", "md:flex md:items-center mb-6");
+    			add_location(div12, file$8, 48, 0, 2552);
+    			attr_dev(label3, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label3, "for", "inline-username");
+    			add_location(label3, file$8, 60, 4, 3149);
+    			attr_dev(div13, "class", "md:w-1/3");
+    			add_location(div13, file$8, 59, 4, 3122);
+    			attr_dev(textarea2, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(textarea2, "id", "inline-username");
+    			attr_dev(textarea2, "type", "text-area");
+    			attr_dev(textarea2, "placeholder", "[4]");
+    			add_location(textarea2, file$8, 65, 4, 3319);
+    			attr_dev(div14, "class", "md:w-2/3");
+    			add_location(div14, file$8, 64, 4, 3292);
+    			attr_dev(div15, "class", "md:flex md:items-center mb-6");
+    			add_location(div15, file$8, 58, 0, 3075);
+    			attr_dev(label4, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label4, "for", "inline-username");
+    			add_location(label4, file$8, 70, 4, 3659);
+    			attr_dev(div16, "class", "md:w-1/3");
+    			add_location(div16, file$8, 69, 2, 3632);
+    			attr_dev(input1, "type", "radio");
+    			attr_dev(input1, "class", "form-radio");
+    			attr_dev(input1, "name", "difficultyType");
+    			input1.value = "easy";
+    			add_location(input1, file$8, 76, 6, 3883);
+    			attr_dev(span1, "class", "ml-2 text-gray-500");
+    			add_location(span1, file$8, 77, 6, 3964);
+    			attr_dev(label5, "class", "inline-flex items-center");
+    			add_location(label5, file$8, 75, 4, 3836);
+    			attr_dev(input2, "type", "radio");
+    			attr_dev(input2, "class", "form-radio");
+    			attr_dev(input2, "name", "difficultyType");
+    			input2.value = "medium";
+    			add_location(input2, file$8, 80, 6, 4078);
+    			attr_dev(span2, "class", "ml-2 text-gray-500");
+    			add_location(span2, file$8, 81, 6, 4161);
+    			attr_dev(label6, "class", "inline-flex items-center ml-6");
+    			add_location(label6, file$8, 79, 4, 4026);
+    			attr_dev(input3, "type", "radio");
+    			attr_dev(input3, "class", "form-radio");
+    			attr_dev(input3, "name", "difficultyType");
+    			input3.value = "hard";
+    			add_location(input3, file$8, 84, 6, 4277);
+    			attr_dev(span3, "class", "ml-2 text-gray-500");
+    			add_location(span3, file$8, 85, 6, 4358);
+    			attr_dev(label7, "class", "inline-flex items-center ml-6");
+    			add_location(label7, file$8, 83, 4, 4225);
+    			attr_dev(div17, "class", "md:w-2/3");
+    			add_location(div17, file$8, 74, 2, 3809);
+    			attr_dev(div18, "class", "md:flex md:items-center mb-6");
+    			add_location(div18, file$8, 68, 0, 3587);
+    			attr_dev(form, "class", "w-full max-w-md");
+    			add_location(form, file$8, 27, 8, 1478);
+    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500 hover:bg-gray-100 hover:text-indigo-400 mr-2");
+    			add_location(button0, file$8, 93, 8, 4515);
+    			attr_dev(button1, "class", "modal-closet px-4 bg-indigo-500 p-3 rounded-lg text-white hover:bg-indigo-400");
+    			add_location(button1, file$8, 94, 8, 4651);
+    			attr_dev(div19, "class", "flex justify-end pt-2");
+    			add_location(div19, file$8, 92, 8, 4471);
+    			attr_dev(div20, "class", "modal-content py-4 text-left px-6");
+    			add_location(div20, file$8, 15, 4, 884);
+    			attr_dev(div21, "class", "modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto");
+    			add_location(div21, file$8, 5, 4, 225);
+    			attr_dev(div22, "class", "modalt opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center");
+    			add_location(div22, file$8, 2, 0, 14);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div22, anchor);
+    			append_dev(div22, div0);
+    			append_dev(div22, t0);
+    			append_dev(div22, div21);
+    			append_dev(div21, div1);
+    			append_dev(div1, svg0);
+    			append_dev(svg0, path0);
+    			append_dev(div1, t1);
+    			append_dev(div1, span0);
+    			append_dev(div21, t3);
+    			append_dev(div21, div20);
+    			append_dev(div20, div3);
+    			append_dev(div3, p);
+    			append_dev(div3, t5);
+    			append_dev(div3, div2);
+    			append_dev(div2, svg1);
+    			append_dev(svg1, path1);
+    			append_dev(div20, t6);
+    			append_dev(div20, form);
+    			append_dev(form, div6);
+    			append_dev(div6, div4);
+    			append_dev(div4, label0);
+    			append_dev(div6, t8);
+    			append_dev(div6, div5);
+    			append_dev(div5, input0);
+    			append_dev(form, t9);
+    			append_dev(form, div9);
+    			append_dev(div9, div7);
+    			append_dev(div7, label1);
+    			append_dev(div9, t11);
+    			append_dev(div9, div8);
+    			append_dev(div8, textarea0);
+    			append_dev(form, t12);
+    			append_dev(form, div12);
+    			append_dev(div12, div10);
+    			append_dev(div10, label2);
+    			append_dev(div12, t14);
+    			append_dev(div12, div11);
+    			append_dev(div11, textarea1);
+    			append_dev(form, t15);
+    			append_dev(form, div15);
+    			append_dev(div15, div13);
+    			append_dev(div13, label3);
+    			append_dev(div15, t17);
+    			append_dev(div15, div14);
+    			append_dev(div14, textarea2);
+    			append_dev(form, t18);
+    			append_dev(form, div18);
+    			append_dev(div18, div16);
+    			append_dev(div16, label4);
+    			append_dev(div18, t20);
+    			append_dev(div18, div17);
+    			append_dev(div17, label5);
+    			append_dev(label5, input1);
+    			append_dev(label5, t21);
+    			append_dev(label5, span1);
+    			append_dev(div17, t23);
+    			append_dev(div17, label6);
+    			append_dev(label6, input2);
+    			append_dev(label6, t24);
+    			append_dev(label6, span2);
+    			append_dev(div17, t26);
+    			append_dev(div17, label7);
+    			append_dev(label7, input3);
+    			append_dev(label7, t27);
+    			append_dev(label7, span3);
+    			append_dev(div20, t29);
+    			append_dev(div20, div19);
+    			append_dev(div19, button0);
+    			append_dev(div19, t31);
+    			append_dev(div19, button1);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div22);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$a.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    class Problemmodal_component extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, null, create_fragment$a, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Problemmodal_component",
+    			options,
+    			id: create_fragment$a.name
+    		});
+    	}
+    }
+
     /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
-    const file$7 = "src/routes/Admin.svelte";
+    const file$9 = "src/routes/Admin.svelte";
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -32722,7 +33465,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (53:12) {:catch err}
+    // (56:12) {:catch err}
     function create_catch_block_1(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
@@ -32750,14 +33493,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block_1.name,
     		type: "catch",
-    		source: "(53:12) {:catch err}",
+    		source: "(56:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (49:12) {:then result}
+    // (52:12) {:then result}
     function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let each_value_1 = /*Test*/ ctx[2].data.allTests;
@@ -32816,14 +33559,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block_1.name,
     		type: "then",
-    		source: "(49:12) {:then result}",
+    		source: "(52:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (50:12) {#each Test.data.allTests as test}
+    // (53:12) {#each Test.data.allTests as test}
     function create_each_block_1(ctx) {
     	let li;
     	let t_value = /*test*/ ctx[10].testName + "";
@@ -32833,7 +33576,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			li = element("li");
     			t = text(t_value);
-    			add_location(li, file$7, 50, 16, 1524);
+    			add_location(li, file$9, 53, 16, 1665);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -32849,14 +33592,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(50:12) {#each Test.data.allTests as test}",
+    		source: "(53:12) {#each Test.data.allTests as test}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (47:26)              Loading...             {:then result}
+    // (50:26)              Loading...             {:then result}
     function create_pending_block_1(ctx) {
     	let t;
 
@@ -32877,14 +33620,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block_1.name,
     		type: "pending",
-    		source: "(47:26)              Loading...             {:then result}",
+    		source: "(50:26)              Loading...             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (74:12) {:catch err}
+    // (78:12) {:catch err}
     function create_catch_block(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
@@ -32912,14 +33655,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(74:12) {:catch err}",
+    		source: "(78:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (70:12) {:then result}
+    // (74:12) {:then result}
     function create_then_block(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
@@ -32978,14 +33721,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(70:12) {:then result}",
+    		source: "(74:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (71:12) {#each result.data.allProblems as prob}
+    // (75:12) {#each result.data.allProblems as prob}
     function create_each_block$1(ctx) {
     	let li;
     	let t_value = /*prob*/ ctx[7].description + "";
@@ -32995,7 +33738,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			li = element("li");
     			t = text(t_value);
-    			add_location(li, file$7, 71, 16, 2227);
+    			add_location(li, file$9, 75, 16, 2488);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -33013,14 +33756,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(71:12) {#each result.data.allProblems as prob}",
+    		source: "(75:12) {#each result.data.allProblems as prob}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (68:29)              Loading...             {:then result}
+    // (72:29)              Loading...             {:then result}
     function create_pending_block(ctx) {
     	let t;
 
@@ -33041,20 +33784,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(68:29)              Loading...             {:then result}",
+    		source: "(72:29)              Loading...             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$9(ctx) {
+    function create_fragment$b(ctx) {
     	let link;
     	let t0;
+    	let body;
     	let nav;
     	let div1;
     	let div0;
-    	let a0;
+    	let a;
     	let t2;
     	let div12;
     	let div6;
@@ -33066,18 +33810,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let promise;
     	let t5;
     	let div4;
-    	let a1;
+    	let button0;
     	let t7;
+    	let t8;
     	let div11;
     	let div10;
     	let div8;
     	let div7;
-    	let t9;
+    	let t10;
     	let ol1;
     	let promise_1;
-    	let t10;
+    	let t11;
     	let div9;
-    	let a2;
+    	let button1;
+    	let t13;
+    	let t14;
+    	let script;
+    	let current;
 
     	let info = {
     		ctx,
@@ -33091,6 +33840,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	handle_promise(promise = /*$Test*/ ctx[0], info);
+    	const testmodal = new Testmodal_component({ $$inline: true });
 
     	let info_1 = {
     		ctx,
@@ -33104,16 +33854,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	handle_promise(promise_1 = /*$Problem*/ ctx[1], info_1);
+    	const problemmodal = new Problemmodal_component({ $$inline: true });
 
     	const block = {
     		c: function create() {
     			link = element("link");
     			t0 = space();
+    			body = element("body");
     			nav = element("nav");
     			div1 = element("div");
     			div0 = element("div");
-    			a0 = element("a");
-    			a0.textContent = "Logout";
+    			a = element("a");
+    			a.textContent = "Logout";
     			t2 = space();
     			div12 = element("div");
     			div6 = element("div");
@@ -33126,64 +33878,73 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.c();
     			t5 = space();
     			div4 = element("div");
-    			a1 = element("a");
-    			a1.textContent = "Add Test";
+    			button0 = element("button");
+    			button0.textContent = "Add Test";
     			t7 = space();
+    			create_component(testmodal.$$.fragment);
+    			t8 = space();
     			div11 = element("div");
     			div10 = element("div");
     			div8 = element("div");
     			div7 = element("div");
     			div7.textContent = "Your Problems";
-    			t9 = space();
+    			t10 = space();
     			ol1 = element("ol");
     			info_1.block.c();
-    			t10 = space();
+    			t11 = space();
     			div9 = element("div");
-    			a2 = element("a");
-    			a2.textContent = "Add Problem";
+    			button1 = element("button");
+    			button1.textContent = "Add Problem";
+    			t13 = space();
+    			create_component(problemmodal.$$.fragment);
+    			t14 = space();
+    			script = element("script");
+    			script.textContent = "//Test Modal\n    var openmodal = document.querySelectorAll('.modal-open')\n    for (var i = 0; i < openmodal.length; i++) {\n      openmodal[i].addEventListener('click', function(event){\n    \tevent.preventDefault()\n    \ttoggleModal()\n      })\n    }\n    \n\n    const overlay = document.querySelector('.modal-overlay')\n    overlay.addEventListener('click', toggleModal)\n    \n    var closemodal = document.querySelectorAll('.modal-close')\n    for (var i = 0; i < closemodal.length; i++) {\n      closemodal[i].addEventListener('click', toggleModal)\n    }\n    \n    document.onkeydown = function(evt) {\n      evt = evt || window.event\n      var isEscape = false\n      if (\"key\" in evt) {\n    \tisEscape = (evt.key === \"Escape\" || evt.key === \"Esc\")\n      } else {\n    \tisEscape = (evt.keyCode === 27)\n      }\n      if (isEscape && document.body.classList.contains('modal-active')) {\n    \ttoggleModal()\n      }\n    };\n    \n    \n    function toggleModal () {\n      const body = document.querySelector('body')\n      const modal = document.querySelector('.modal')\n      modal.classList.toggle('opacity-0')\n      modal.classList.toggle('pointer-events-none')\n      body.classList.toggle('modal-active')\n    }\n\n    // End of Test Modal\n\n\n     //Problem Modal\n    var openmodalt = document.querySelectorAll('.modal-opent')\n    for (var i = 0; i < openmodalt.length; i++) {\n      openmodalt[i].addEventListener('click', function(event){\n    \tevent.preventDefault()\n    \ttoggleModalt()\n      })\n    }\n    \n\n    const overlayt = document.querySelector('.modal-overlayt')\n    overlayt.addEventListener('click', toggleModalt)\n    \n    var closemodalt = document.querySelectorAll('.modal-closet')\n    for (var i = 0; i < closemodalt.length; i++) {\n      closemodalt[i].addEventListener('click', toggleModalt)\n    }\n    \n    document.onkeydown = function(evt) {\n      evt = evt || window.event\n      var isEscape = false\n      if (\"key\" in evt) {\n    \tisEscape = (evt.key === \"Escape\" || evt.key === \"Esc\")\n      } else {\n    \tisEscape = (evt.keyCode === 27)\n      }\n      if (isEscape && document.body.classList.contains('modal-active')) {\n    \ttoggleModalt()\n      }\n    };\n    \n    \n    function toggleModalt () {\n      const body = document.querySelector('body')\n      const modal = document.querySelector('.modalt')\n      modal.classList.toggle('opacity-0')\n      modal.classList.toggle('pointer-events-none')\n      body.classList.toggle('modal-active')\n    }\n\n    // End of Problem Modal";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$7, 7, 1, 270);
-    			attr_dev(a0, "href", "http://server.rajat.local/logout");
-    			attr_dev(a0, "id", "btn");
-    			attr_dev(a0, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-17gezq0");
-    			add_location(a0, file$7, 34, 8, 874);
-    			add_location(div0, file$7, 33, 8, 860);
+    			add_location(link, file$9, 9, 1, 408);
+    			attr_dev(a, "href", "http://localhost:3000/logout");
+    			attr_dev(a, "id", "btn");
+    			attr_dev(a, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-17gezq0");
+    			add_location(a, file$9, 37, 8, 1019);
+    			add_location(div0, file$9, 36, 8, 1005);
     			attr_dev(div1, "class", "w-full block flex-grow lg:items-right");
-    			add_location(div1, file$7, 32, 4, 800);
+    			add_location(div1, file$9, 35, 4, 945);
     			attr_dev(nav, "class", "flex items-center justify-between flex-wrap bg-teal-500 p-6");
-    			add_location(nav, file$7, 31, 0, 722);
+    			add_location(nav, file$9, 34, 0, 867);
     			attr_dev(div2, "class", "font-bold text-xl mb-2");
-    			add_location(div2, file$7, 44, 12, 1314);
-    			add_location(ol0, file$7, 45, 12, 1379);
+    			add_location(div2, file$9, 47, 12, 1455);
+    			add_location(ol0, file$9, 48, 12, 1520);
     			attr_dev(div3, "class", "px-6 py-4");
-    			add_location(div3, file$7, 43, 8, 1278);
-    			attr_dev(a1, "href", "#");
-    			attr_dev(a1, "class", "inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2");
-    			add_location(a1, file$7, 58, 12, 1717);
+    			add_location(div3, file$9, 46, 8, 1419);
+    			attr_dev(button0, "class", "modal-open bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full svelte-17gezq0");
+    			add_location(button0, file$9, 61, 13, 1884);
     			attr_dev(div4, "class", "px-6 py-4");
-    			add_location(div4, file$7, 57, 8, 1681);
+    			set_style(div4, "margin-right", "5%");
+    			add_location(div4, file$9, 60, 8, 1822);
     			attr_dev(div5, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div5, file$7, 42, 4, 1213);
+    			add_location(div5, file$9, 45, 4, 1354);
     			attr_dev(div6, "class", "w-1/2 h-12");
-    			add_location(div6, file$7, 41, 0, 1184);
+    			add_location(div6, file$9, 44, 0, 1325);
     			attr_dev(div7, "class", "font-bold text-xl mb-2");
-    			add_location(div7, file$7, 65, 12, 2006);
-    			add_location(ol1, file$7, 66, 12, 2074);
+    			add_location(div7, file$9, 69, 12, 2267);
+    			add_location(ol1, file$9, 70, 12, 2335);
     			attr_dev(div8, "class", "px-6 py-4");
-    			add_location(div8, file$7, 64, 8, 1970);
-    			attr_dev(a2, "href", "#");
-    			attr_dev(a2, "class", "inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2");
-    			add_location(a2, file$7, 79, 12, 2423);
+    			add_location(div8, file$9, 68, 9, 2231);
+    			attr_dev(button1, "class", "modal-opent bg-transparent border border-gray-500 hover:border-indigo-500 text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full svelte-17gezq0");
+    			add_location(button1, file$9, 83, 11, 2709);
     			attr_dev(div9, "class", "px-6 py-4");
-    			add_location(div9, file$7, 78, 8, 2387);
+    			set_style(div9, "margin-right", "10%");
+    			add_location(div9, file$9, 82, 8, 2648);
     			attr_dev(div10, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div10, file$7, 63, 4, 1905);
+    			add_location(div10, file$9, 67, 4, 2165);
     			attr_dev(div11, "class", "w-1/2 h-12");
-    			add_location(div11, file$7, 62, 0, 1876);
+    			add_location(div11, file$9, 66, 0, 2136);
     			attr_dev(div12, "id", "blk");
     			attr_dev(div12, "class", "flex mb-4 svelte-17gezq0");
-    			add_location(div12, file$7, 40, 0, 1151);
+    			add_location(div12, file$9, 43, 0, 1292);
+    			add_location(script, file$9, 92, 1, 2973);
+    			add_location(body, file$9, 32, 0, 859);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33191,12 +33952,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		m: function mount(target, anchor) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
-    			insert_dev(target, nav, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, nav);
     			append_dev(nav, div1);
     			append_dev(div1, div0);
-    			append_dev(div0, a0);
-    			insert_dev(target, t2, anchor);
-    			insert_dev(target, div12, anchor);
+    			append_dev(div0, a);
+    			append_dev(body, t2);
+    			append_dev(body, div12);
     			append_dev(div12, div6);
     			append_dev(div6, div5);
     			append_dev(div5, div3);
@@ -33208,20 +33970,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.anchor = null;
     			append_dev(div5, t5);
     			append_dev(div5, div4);
-    			append_dev(div4, a1);
-    			append_dev(div12, t7);
+    			append_dev(div4, button0);
+    			append_dev(div4, t7);
+    			mount_component(testmodal, div4, null);
+    			append_dev(div12, t8);
     			append_dev(div12, div11);
     			append_dev(div11, div10);
     			append_dev(div10, div8);
     			append_dev(div8, div7);
-    			append_dev(div8, t9);
+    			append_dev(div8, t10);
     			append_dev(div8, ol1);
     			info_1.block.m(ol1, info_1.anchor = null);
     			info_1.mount = () => ol1;
     			info_1.anchor = null;
-    			append_dev(div10, t10);
+    			append_dev(div10, t11);
     			append_dev(div10, div9);
-    			append_dev(div9, a2);
+    			append_dev(div9, button1);
+    			append_dev(div9, t13);
+    			mount_component(problemmodal, div9, null);
+    			append_dev(body, t14);
+    			append_dev(body, script);
+    			current = true;
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
@@ -33241,26 +34010,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				info_1.block.p(child_ctx, dirty);
     			}
     		},
-    		i: noop,
-    		o: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(testmodal.$$.fragment, local);
+    			transition_in(problemmodal.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(testmodal.$$.fragment, local);
+    			transition_out(problemmodal.$$.fragment, local);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(link);
     			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(nav);
-    			if (detaching) detach_dev(t2);
-    			if (detaching) detach_dev(div12);
+    			if (detaching) detach_dev(body);
     			info.block.d();
     			info.token = null;
     			info = null;
+    			destroy_component(testmodal);
     			info_1.block.d();
     			info_1.token = null;
     			info_1 = null;
+    			destroy_component(problemmodal);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$9.name,
+    		id: create_fragment$b.name,
     		type: "component",
     		source: "",
     		ctx
@@ -33295,13 +34073,111 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Admin extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$9, create_fragment$9, safe_not_equal, {});
+    		init(this, options, instance$9, create_fragment$b, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Admin",
     			options,
-    			id: create_fragment$9.name
+    			id: create_fragment$b.name
+    		});
+    	}
+    }
+
+    /* src/routes/Login.svelte generated by Svelte v3.18.1 */
+
+    const file$a = "src/routes/Login.svelte";
+
+    function create_fragment$c(ctx) {
+    	let link;
+    	let t0;
+    	let nav;
+    	let div1;
+    	let div0;
+    	let a;
+    	let t2;
+    	let div2;
+    	let p;
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			nav = element("nav");
+    			div1 = element("div");
+    			div0 = element("div");
+    			a = element("a");
+    			a.textContent = "Login with Google";
+    			t2 = space();
+    			div2 = element("div");
+    			p = element("p");
+    			p.textContent = "Try Out.";
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$a, 0, 1, 1);
+    			attr_dev(a, "href", "http://localhost:3000/auth/google");
+    			attr_dev(a, "id", "link");
+    			attr_dev(a, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-wth3h2");
+    			add_location(a, file$a, 69, 8, 1459);
+    			add_location(div0, file$a, 68, 8, 1445);
+    			attr_dev(div1, "class", "w-full block flex-grow lg:items-right");
+    			add_location(div1, file$a, 67, 4, 1385);
+    			attr_dev(nav, "class", "flex items-center justify-between flex-wrap bg-teal-500 p-6");
+    			add_location(nav, file$a, 66, 0, 1307);
+    			attr_dev(p, "class", "line-1 anim-typewriter svelte-wth3h2");
+    			add_location(p, file$a, 75, 4, 1811);
+    			set_style(div2, "margin", "20%");
+    			set_style(div2, "margin-top", "20%");
+    			set_style(div2, "font-size", "40px");
+    			add_location(div2, file$a, 74, 0, 1748);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, nav, anchor);
+    			append_dev(nav, div1);
+    			append_dev(div1, div0);
+    			append_dev(div0, a);
+    			insert_dev(target, t2, anchor);
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, p);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(nav);
+    			if (detaching) detach_dev(t2);
+    			if (detaching) detach_dev(div2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$c.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    class Login extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, null, create_fragment$c, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Login",
+    			options,
+    			id: create_fragment$c.name
     		});
     	}
     }
@@ -38486,9 +39362,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }(ApolloCache));
 
     /* src/App.svelte generated by Svelte v3.18.1 */
-    const file$8 = "src/App.svelte";
+    const file$b = "src/App.svelte";
 
-    // (68:0) <Router>
+    // (64:0) <Router>
     function create_default_slot(ctx) {
     	let div;
     	let t0;
@@ -38506,7 +39382,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		});
 
     	const route2 = new Route({
-    			props: { path: "/", component: Admin },
+    			props: { path: "/", component: Login },
     			$$inline: true
     		});
 
@@ -38518,7 +39394,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(route1.$$.fragment);
     			t1 = space();
     			create_component(route2.$$.fragment);
-    			add_location(div, file$8, 68, 2, 2116);
+    			add_location(div, file$b, 64, 2, 2062);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -38555,19 +39431,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_default_slot.name,
     		type: "slot",
-    		source: "(68:0) <Router>",
+    		source: "(64:0) <Router>",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$a(ctx) {
-    	let div;
-    	let t;
+    function create_fragment$d(ctx) {
     	let current;
     	let dispose;
-    	const tabs = new Tabs({ $$inline: true });
 
     	const router = new Router({
     			props: {
@@ -38579,20 +39452,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
-    			div = element("div");
-    			create_component(tabs.$$.fragment);
-    			t = space();
     			create_component(router.$$.fragment);
-    			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$8, 64, 0, 2052);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			mount_component(tabs, div, null);
-    			insert_dev(target, t, anchor);
     			mount_component(router, target, anchor);
     			current = true;
     			dispose = listen_dev(window, "keydown", /*keydown_handler*/ ctx[6], false, false, false);
@@ -38608,19 +39473,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(tabs.$$.fragment, local);
     			transition_in(router.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
-    			transition_out(tabs.$$.fragment, local);
     			transition_out(router.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			destroy_component(tabs);
-    			if (detaching) detach_dev(t);
     			destroy_component(router, detaching);
     			dispose();
     		}
@@ -38628,7 +39488,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$a.name,
+    		id: create_fragment$d.name,
     		type: "component",
     		source: "",
     		ctx
@@ -38646,7 +39506,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	component_subscribe($$self, dataStore, $$value => $$invalidate(1, $dataStore = $$value));
     	
     	const cache = new InMemoryCache();
-    	const link = new HttpLink({ uri: "http://localhost:4000/" });
+    	const link = new HttpLink({ uri: "http://localhost:3000/" });
     	const client = new ApolloClient({ link, cache });
     	setClient(client);
     	const problems = query(client, { query: apolloClient.getProblems });
@@ -38706,13 +39566,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, {});
+    		init(this, options, instance$a, create_fragment$d, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$a.name
+    			id: create_fragment$d.name
     		});
     	}
     }

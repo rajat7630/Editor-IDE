@@ -3,6 +3,7 @@ const { ApolloServer } = require('apollo-server');
 const typeDefs = gql`
   type Problem {
     id: ID!
+    problemName :String
     description: String
     testCase: String
     output: String
