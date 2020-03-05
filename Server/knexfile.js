@@ -3,19 +3,19 @@
 module.exports = {
 
   development: {
-    client: 'postgresql',
+    client: 'pg',
     connection: {
       user : 'postgres',
-      password : 'postgres',
+      password : 'password',
       host:'localhost',
-      port: '5432',
-      database:'tryout'
+      port: '5500',
+      database:'try_out_db'
 
     }
   },
 
   staging: {
-    client: 'postgresql',
+    client: 'pg',
     connection: {
       database: 'my_db',
       user:     'username',
@@ -31,7 +31,7 @@ module.exports = {
   },
 
   production: {
-    client: 'postgresql',
+    client: 'pg',
     connection: {
       database: 'my_db',
       user:     'username',
