@@ -1,8 +1,14 @@
 <script>
   import { Router, Link, Route } from "svelte-routing";
+
+
+//Routes
   import Home from "./Home.svelte";
-  import Admin from "./routes/Admin.svelte";;
-  import Login from "./routes/Login.svelte"
+  import Admin from "./routes/Admin.svelte";
+  import Login from "./routes/Login.svelte";
+  import Problems from "./routes/Problems.svelte";
+  import Tests from "./routes/Tests.svelte";
+
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
@@ -63,6 +69,8 @@
   }} />
 <Router>
   <div>
+    <Route path="/problem" component="{Problems}" />
+    <Route path="/test" component="{Tests}"/>
     <Route path="/admin" component="{Admin}" />
     <Route path="/home" component="{Home}"/>
     <Route path="/" component="{Login}"/>
