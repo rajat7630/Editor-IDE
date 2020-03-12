@@ -6,12 +6,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser());
 
-var indexRouter = require('./routes/index');
+const indexRouter = require('./routes/index');
 //var usersRouter = require("./routes/users");
-
+const clientLogin= require("./routes/client_routes.js");
 app.use('/', indexRouter);
+app.use("/test", clientLogin)
 const authenticationRouter = require('./routes/authenticationRouter');
-
+const authenticateClient= require("./routes/client_login.js");
 //app.use('/login',authenticationRouter);
 
 app.get('/', (req, res) => {
