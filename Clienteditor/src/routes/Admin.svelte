@@ -3,6 +3,7 @@ import { apolloClient } from "../apolloClient.js";
 import { getClient, query } from "svelte-apollo";
 import TestModal from "../components/testmodal_component.svelte";
 import ProblemModal from "../components/problemmodal_component.svelte";
+import Navbar from '../components/navbar.svelte';
 const client= getClient();
 const Test= query(client, {query:apolloClient.allTests});
 const Problem= query(client, {query:apolloClient.getProblems});
@@ -32,14 +33,7 @@ const Problem= query(client, {query:apolloClient.getProblems});
 </style>
 <body>
 
-<nav class="flex items-center justify-between flex-wrap bg-teal-500 p-6">
-    <div class="w-full block flex-grow lg:items-right">
-        <div>
-        <a href="http://localhost:3000/logout" id="btn" class="inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0">Logout</a>
-        </div>
-    </div>
-</nav>
-
+<Navbar/>
 
 <div id="blk" class="flex mb-4">
 <div class="w-1/2 h-12">
