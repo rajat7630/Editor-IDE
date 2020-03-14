@@ -3,9 +3,10 @@
 button.svelte-17gezq0{margin-left:92%}#blk.svelte-17gezq0{margin-top:6%;margin-left:10%;margin-right:6%}#btn.svelte-17gezq0{float:right}
 @import url(https://fonts.googleapis.com/css?family=Anonymous+Pro);.line-1.svelte-wth3h2{position:relative;top:50%;width:24em;margin:0 auto;border-right:2px solid rgba(255,255,255,.75);font-size:180%;text-align:center;white-space:nowrap;overflow:hidden;transform:translateY(-50%)}#link.svelte-wth3h2{float:right}.anim-typewriter.svelte-wth3h2{animation:svelte-wth3h2-typewriter 4s steps(44) 1s 1 normal both,
              svelte-wth3h2-blinkTextCursor 500ms steps(44) infinite normal}@keyframes svelte-wth3h2-typewriter{from{width:0}to{width:15em}}@keyframes svelte-wth3h2-blinkTextCursor{from{border-right-color:rgba(255,255,255,.75)}to{border-right-color:transparent}}
-.addProblem.svelte-k32fq8{background:#1d1f21;border-left:solid 46px #25282c;padding:2vh;color:white}.textLabel.svelte-k32fq8{color:white;font-size:1.5rem}.svelte-k32fq8::-webkit-scrollbar{width:20px;height:4px}.saveButton.svelte-k32fq8{margin-left:90%;margin-top:2vh;outline:none;font-size:1.2rem}.saveButton.svelte-k32fq8:active{outline:none;border:white;background:#1d1f21}
 .editor.svelte-9invhd{width:100%;font-size:1.4rem;border-bottom:solid 2px #25282c}
+.addProblem.svelte-k32fq8{background:#1d1f21;border-left:solid 46px #25282c;padding:2vh;color:white}.textLabel.svelte-k32fq8{color:white;font-size:1.5rem}.svelte-k32fq8::-webkit-scrollbar{width:20px;height:4px}.saveButton.svelte-k32fq8{margin-left:90%;margin-top:2vh;outline:none;font-size:1.2rem}.saveButton.svelte-k32fq8:active{outline:none;border:white;background:#1d1f21}
 .editor.svelte-15jd4d1{border-bottom:solid 2px #25282c;max-width:40vw;height:20vh;font-size:1.2rem}
 .editor.svelte-15jd4d1{border-bottom:solid 2px #25282c;max-width:40vw;height:20vh;font-size:1.2rem}
+.active.svelte-1dg7nhh{font-size:20px;z-index:100}.no_active.svelte-1dg7nhh{display:none}
 
 /*# sourceMappingURL=bundle.css.map */

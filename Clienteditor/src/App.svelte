@@ -2,11 +2,13 @@
   import { Router, Link, Route } from "svelte-routing";
   import Home from "./Home.svelte";
   import Admin from "./routes/Admin.svelte";
-  import Login from "./routes/Login.svelte"
+  import Login from "./routes/Login.svelte";
   import Test from "./routes/test.svelte";
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
+  import GiveTest from "./routes/give_test.svelte";
+  import SendTest from "./routes/send_test.svelte";
   import { dataStore, currentTab } from "./store.js";
   import { apolloClient } from "./apolloClient.js";
   import { getClient, query } from "svelte-apollo";
@@ -17,7 +19,7 @@
   import gql from "graphql-tag";
   const cache = new InMemoryCache();
   const link = new HttpLink({
-    uri: "http://localhost:3000/"
+    uri: "http://localhost:3000/graphql"
   });
   const client = new ApolloClient({
     link,
@@ -64,11 +66,17 @@
   }} />
 <Router>
   <div>
-    <Route path="/admin" component="{Admin}" />
-    <Route path="/home" component="{Home}"/>
-    <Route path="/" component="{Login}"/>
+    <Route path="/admin" component={Admin} />
+    <Route path="/home" component={Home} />
+    <Route path="/" component={Login} />
     <Route path="/test/:id" let:params>
-    <Test id={params.id}/>
+      <Test id={params.id} />
+    </Route>
+    <Route path="sendtest/:id" let:params>
+      <SendTest id={params.id} />
+    </Route>
+    <Route path="/givetest/:token" let:params>
+      <GiveTest token={params.token} />
     </Route>
   </div>
 </Router>

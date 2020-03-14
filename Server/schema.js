@@ -3,12 +3,16 @@ const { ApolloServer } = require('apollo-server');
 const typeDefs = gql`
   type Problem {
     id: ID!
-    problemName :String
+    problemName: String
     description: String
     testCase: String
     output: String
     creationDate: String
     author: Author
+  }
+
+  type Payload {
+    token:String!
   }
 
   type Test {
@@ -38,6 +42,7 @@ const typeDefs = gql`
   }
 
   type Query {
+    getToken(id:ID!):Payload
     allProblems: [Problem]
     problemById(id: ID!): Problem
     allTests: [Test]
@@ -61,10 +66,10 @@ const typeDefs = gql`
     ): createTest
   }
 
-  type createTest{
-    success:Boolean,
-    message:String,
-    test:[Test]
+  type createTest {
+    success: Boolean
+    message: String
+    test: [Test]
   }
 
   type addNewProblem {
