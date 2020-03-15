@@ -73,7 +73,7 @@ const Problem= query(client, {query:apolloClient.getProblems});
             Loading...
             {:then result}
             {#each result.data.allProblems as prob}
-                <li>{prob.description}</li>
+                <li>{prob.problemName}</li>
             {/each}
             {:catch err}
             Error: {err}

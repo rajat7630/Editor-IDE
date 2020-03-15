@@ -1,5 +1,5 @@
 const Problem = require('./models/Problem');
-//const TestProblem = require('./models/TestProblem');
+const TestProblem = require('./models/TestProblem');
 const Test = require('./models/Test');
 //const Attempt = require('./models/Attempt');
 
@@ -37,56 +37,48 @@ async function createNewTest(test) {
     }
 }
 
-// async function problemReducer(prob) {
+async function problemReducer(prob) {
 
-//   const author = await Problem.query().findById(`${prob.a_id}`);
+  return {
+    id: prob.id,
+    problemName :prob.problemName,
+    description: prob.description,
+    testCases: prob.problemTests,
+    difficultyLevel: prob.difficultyLevel,
+    createdAt: prob.createdAt,
+    email: prob.email
+  };
+}
 
-//   console.log(author);
-//   return {
-//     id: prob.p_id,
-//     problemName :prob.problem_name,
-//     description: prob.description,
-//     testCase: prob.test_cases,
-//     output: prob.output,
-//     creationDate: prob.created_at,
-//     author: {
-//       id: author.rows[0].a_id,
-//       email: author.rows[0].email
-//     }
-//   };
-// }
-
-// async function testReducer(test) {
-
-//   const author = await Admin.query().findById(`${test.a_id}`);
+async function testReducer(test) {
 
 
-//   // const problem = await client.query(
-//   //   `SELECT * FROM  Problems INNER JOIN test_info ON test_info.problemid=id WHERE test_info.testid=${test.id}`
-//   // );
-
-//   const problem = await Problems.query().findById(`${prob.a_id}`);
-
-//   return {
-//     id: test.id,
-//     testName: test.testname,
-//     difficulty: test.difficultylevel,
-//     author: {
-//       id: author.rows[0].id,
-//       email: author.rows[0].email
-//     },
-//     creationDate: test.creationdate,
-//     problems: problem.rows.map((prob) => problemReducer(prob))
-//   };
-// }
+  const problem = await Problem.query()
+                       .where('id' ,'IN',
+                       TestProblem.query().select('p_id').where('t_id',test.id));
+  //console.log(problem);
+  // console.log(test.id);
+  //console.log(problem.map((prob) => {return problemReducer(prob);}));
+  return {
+    id: test.id,
+    testName: test.testName,
+    difficultyLevel: test.difficultyLevel,
+    email : test.email,
+    createdAt: test.createdAt,
+    problems: problem.map((prob) => {return problemReducer(prob);})
+  };
+}
 
 async function getAllProblems() {
   const res =  await Problem.query();
-  return res.rows.map((problem) => {
+  return res.map((problem) => {
        console.log(problemReducer(problem));
     return problemReducer(problem);
-  });
+  }); 
+  //console.log(res);
 }
+
+//getAllProblems();
 
 async function getProblemById(id) {
   const res =  await Problem.query().findById(id);
@@ -96,10 +88,13 @@ async function getProblemById(id) {
 
 async function getAllTests() {
   const res = await Test.query();
-    return res.rows.map((test) => {
-      return testReducer(test);
+     return res.map((test) => {
+       console.log(testReducer(test));
+           return testReducer(test);
     });
+    //console.log(res);
 }
+//getAllTests();
 
 async function getTestByAuthor(email) {
   const res = await Test.query().where('email',email);
