@@ -1,13 +1,10 @@
 <script>
-  import { Router, Link, Route } from "svelte-routing";
+ // import { Router, Link, Route } from "svelte-routing";
 
 
 //Routes
-  import Home from "./Home.svelte";
-  import Admin from "./routes/Admin.svelte";
-  import Login from "./routes/Login.svelte";
-  import Problems from "./routes/Problems.svelte";
-  import Tests from "./routes/Tests.svelte";
+  import { Router } from 'svelte-router-spa'
+  import { routes } from './routes'
 
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
@@ -34,6 +31,11 @@
   onMount(() => {
     dataStore.updateData();
   });
+
+  var isAdmin = () => {
+   
+  }
+  console.log(isAdmin());
 </script>
 
 <svelte:window
@@ -67,12 +69,4 @@
       dataStore.deleteTab(id);
     }
   }} />
-<Router>
-  <div>
-    <Route path="/problem" component="{Problems}" />
-    <Route path="/test" component="{Tests}"/>
-    <Route path="/admin" component="{Admin}" />
-    <Route path="/home" component="{Home}"/>
-    <Route path="/" component="{Login}"/>
-  </div>
-</Router>
+<Router {routes} />

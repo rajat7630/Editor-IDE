@@ -52,12 +52,17 @@ router.get(
         redis.print
         );
 
+        res.cookie('access_token', token1, {
+          httpOnly:false
+        });
+
 		res.redirect("http://localhost:5000/admin?token=" + token);
 	}
 );
 
 router.get('/logout', function(req, res){
     req.logout();
+    res.clearCookie("access_token");
     res.redirect('http://localhost:5000');
   });
 
