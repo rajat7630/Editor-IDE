@@ -56,9 +56,9 @@ async function testReducer(test) {
   const problem = await Problem.query()
                        .where('id' ,'IN',
                        TestProblem.query().select('p_id').where('t_id',test.id));
-  //console.log(problem);
-  // console.log(test.id);
-  //console.log(problem.map((prob) => {return problemReducer(prob);}));
+  console.log(problem);
+  console.log(test.id);
+  console.log(problem.map((prob) => {return problemReducer(prob);}));
   return {
     id: test.id,
     testName: test.testName,

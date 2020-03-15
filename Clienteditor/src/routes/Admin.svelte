@@ -44,7 +44,7 @@ const Problem= query(client, {query:apolloClient.getProblems});
             {#await $Test}
             Loading...
             {:then result}
-            {#each Test.data.allTests as test}
+            {#each result.data.allTests as test}
                 <li>{test.testName}</li>
             {/each}
             {:catch err}
