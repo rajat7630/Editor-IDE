@@ -13,7 +13,7 @@ const getProblems = gql`
 
 const getToken = gql`
   query getToken($id: ID!) {
-    getToken(id:$id) {
+    getToken(id: $id) {
       token
     }
   }
@@ -28,8 +28,17 @@ const allTests = gql`
   }
 `;
 
+const testByToken = gql`
+query getTest{
+  testByToken{
+    id
+    testName
+  }
+}
+`;
+
 export const apolloClient = {
   getProblems,
   allTests,
-  getToken,
+  getToken
 };

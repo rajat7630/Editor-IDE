@@ -2,6 +2,16 @@
   let clientData = { name: "", email: "", organization: "" };
   $:active = true;
   console.log(clientData);
+  import {getClient, mutate} from "svelte-apollo";
+  import {apolloClient} from "../apolloClient.js";
+  const client= getClient();
+async function addUser()
+{
+    try await mutate(client, {
+        mutation:
+    })
+}
+
 </script>
 
 <style>

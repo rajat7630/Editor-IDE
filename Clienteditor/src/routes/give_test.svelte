@@ -2,6 +2,7 @@
   export let token;
   import ClientDetails from "../components/client_details.svelte";
   console.log(token);
+    
 </script>
 <ClientDetails/>
 <div>

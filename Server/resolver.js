@@ -19,7 +19,11 @@ module.exports = {
     },
     problemsByAuthor: (_, { id }) => {
       return store.getProblemsByAuthor(id);
-    }
+    },
+    testByToken:(_, {token})=>{
+      return store.getTestByToken(token);
+    },
+
   },
   Mutation: {
     addProblem: (_, newproblem) => {
@@ -29,6 +33,10 @@ module.exports = {
 
     addTest: (_, newTest) => {
       return store.createNewTest(newTest);
+    },
+
+    addUser:(_,newUser)=>{
+      return store.addNewUser(newUser);
     }
   }
 };

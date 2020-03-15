@@ -32,7 +32,8 @@ const typeDefs = gql`
   type Student {
     id: ID!
     email: String
-    solution: [Solution]
+    name:String
+    organisation:String
   }
 
   type Solution {
@@ -48,6 +49,7 @@ const typeDefs = gql`
     allTests: [Test]
     testByAuthor(id: ID!): [Test]
     problemsByAuthor(id: ID!): [Problem]
+    testByToken(token:String):Test
   }
 
   type Mutation {
@@ -64,6 +66,18 @@ const typeDefs = gql`
       authorId: ID
       problem: [ID]
     ): createTest
+
+    addUser(
+      name:String
+      email:String
+      organisation:String
+    ):userDetails
+  }
+
+  type userDetails{
+    success:Boolean
+    message:String
+    Details:Student
   }
 
   type createTest {

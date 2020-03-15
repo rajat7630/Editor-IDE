@@ -123,7 +123,25 @@ function getToken(id) {
   return {token:token};
 }
 
+function addNewUser(newUser){
+  console.log(newUser);
+  return {
+    success:true,
+    message:"Successfully added",
+    Details:newUser
+  }
+}
+
+function getTestByToken(token)
+{
+  console.log(token);
+  const decode = jwt.decode(token);
+  console.log(decode);
+}
+
 module.exports = {
+  getTestByToken,
+  addNewUser,
   getToken,
   getAllProblems,
   getProblemById,
