@@ -4,9 +4,12 @@ const getProblems = gql`
   query getAllProblems {
     allProblems {
       id
+      problemName
       description
-      testCase
-      output
+      testCases
+      createdAt
+      difficultyLevel
+      email
     }
   }
 `;
@@ -16,6 +19,12 @@ const allTests = gql`
     allTests {
       id
       testName
+      difficultyLevel
+      email
+      createdAt
+      problems {
+        id
+      }
     }
   }
 `;
