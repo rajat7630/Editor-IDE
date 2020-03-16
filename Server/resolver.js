@@ -14,21 +14,21 @@ module.exports = {
     allTests: () => {
       return store.getAllTests();
     },
-    testByAuthor: (_, { id }) => {
-      return store.getTestByAuthor(id);
-    },
-    problemsByAuthor: (_, { id }) => {
-      return store.getProblemsByAuthor(id);
-    },
     testByToken:(_, {token})=>{
       return store.getTestByToken(token);
     },
 
+    testByAuthor: (_, {email}) => {
+      return store.getTestByAuthor(email);
+    },
+    problemsByAuthor:(_, {email})=>{
+      return store.getProblemsByAuthor(email);
+    }
   },
   Mutation: {
-    addProblem: (_, newproblem) => {
-      console.log(newproblem);
-      return store.addNewProblem(newproblem);
+    addProblem: (_, newProblem ) => {
+      console.log(newProblem);
+      return store.addNewProblem(newProblem);
     },
 
     addTest: (_, newTest) => {

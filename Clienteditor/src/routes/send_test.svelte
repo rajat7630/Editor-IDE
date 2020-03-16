@@ -1,11 +1,10 @@
 <script>
-  export let id;
+  export let currentRoute;
   import { getClient, query } from "svelte-apollo";
   import {apolloClient } from "../apolloClient.js";
   const client = getClient();
-  const token = query(client, { query: apolloClient.getToken, variables: { id} });
-  console.log(id, token);
-  $: generatedLink = "localhost:5000/";
+  const token = query(client, { query: apolloClient.getToken, variables: { id:currentRoute.namedParams.id} });
+
 </script>
 
 <h1>The link generated is as follows</h1>

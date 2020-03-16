@@ -1,9 +1,11 @@
 <script>
-  import { Router, Link, Route } from "svelte-routing";
-  import Home from "./Home.svelte";
-  import Admin from "./routes/Admin.svelte";
-  import Login from "./routes/Login.svelte";
-  import Test from "./routes/test.svelte";
+ // import { Router, Link, Route } from "svelte-routing";
+
+
+//Routes
+  import { Router } from 'svelte-router-spa'
+  import { routes } from './routes'
+
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
@@ -27,10 +29,7 @@
   });
 
   setClient(client);
-  const problems = query(client, { query: apolloClient.getProblems });
-  onMount(() => {
-    dataStore.updateData();
-  });
+  export let currentRoute;
 </script>
 
 <svelte:window
@@ -64,19 +63,4 @@
       dataStore.deleteTab(id);
     }
   }} />
-<Router>
-  <div>
-    <Route path="/admin" component={Admin} />
-    <Route path="/home" component={Home} />
-    <Route path="/" component={Login} />
-    <Route path="/test/:id" let:params>
-      <Test id={params.id} />
-    </Route>
-    <Route path="sendtest/:id" let:params>
-      <SendTest id={params.id} />
-    </Route>
-    <Route path="/givetest/:token" let:params>
-      <GiveTest token={params.token} />
-    </Route>
-  </div>
-</Router>
+<Router {routes} {currentRoute}/>
