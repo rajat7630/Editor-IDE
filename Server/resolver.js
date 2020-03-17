@@ -37,6 +37,10 @@ module.exports = {
 
     addUser:(_,newUser)=>{
       return store.addNewUser(newUser);
+    },
+
+    sendMail:(_, mailDetails)=>{
+      return store.sendMail(mailDetails);
     }
   }
 };

@@ -36,8 +36,17 @@ const testByToken = gql`
   }
 `;
 
+const sendMail = gql`
+  mutation mailSender($mailBody:String , $email:String) {
+    sendMail(mailBody: $mailBody, email: $email) {
+      success
+      message
+    }
+  }
+`;
 
 export const apolloClient = {
+  sendMail,
   getProblems,
   allTests,
   getToken,

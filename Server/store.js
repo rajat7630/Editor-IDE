@@ -3,7 +3,21 @@ const TestProblem = require('./models/TestProblem');
 const Test = require('./models/Test');
 const jwt = require('jsonwebtoken');
 //const Attempt = require('./models/Attempt');
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransport({
+  service: 'Gmail',
+  auth: {
+    user: 'tryouteditor@gmail.com',
+    pass: 'tryout@123'
+  }
+});
 
+let mailOptions = {
+  from: 'tryouteditor@gmail.com',
+  to: '',
+  subject: 'Test from Sourcefuse Technologies',
+  text: ''
+};
 async function addNewProblem(problem) {
   try {
     const res = await Problem.query()
@@ -39,10 +53,9 @@ async function createNewTest(test) {
 }
 
 async function problemReducer(prob) {
-
   return {
     id: prob.id,
-    problemName :prob.problemName,
+    problemName: prob.problemName,
     description: prob.description,
     testCases: prob.problemTests,
     difficultyLevel: prob.difficultyLevel,
@@ -52,11 +65,13 @@ async function problemReducer(prob) {
 }
 
 async function testReducer(test) {
-
-
-  const problem = await Problem.query()
-                       .where('id' ,'IN',
-                       TestProblem.query().select('p_id').where('t_id',test.id));
+  const problem = await Problem.query().where(
+    'id',
+    'IN',
+    TestProblem.query()
+      .select('p_id')
+      .where('t_id', test.id)
+  );
   //console.log(problem);
   // console.log(test.id);
   //console.log(problem.map((prob) => {return problemReducer(prob);}));
@@ -64,18 +79,20 @@ async function testReducer(test) {
     id: test.id,
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
-    email : test.email,
+    email: test.email,
     createdAt: test.createdAt,
-    problems: problem.map((prob) => {return problemReducer(prob);})
+    problems: problem.map((prob) => {
+      return problemReducer(prob);
+    })
   };
 }
 
 async function getAllProblems() {
-  const res =  await Problem.query();
+  const res = await Problem.query();
   return res.map((problem) => {
-       console.log(problemReducer(problem));
+    console.log(problemReducer(problem));
     return problemReducer(problem);
-  }); 
+  });
   //console.log(res);
 }
 
@@ -89,11 +106,11 @@ async function getProblemById(id) {
 
 async function getAllTests() {
   const res = await Test.query();
-     return res.map((test) => {
-       console.log(testReducer(test));
-           return testReducer(test);
-    });
-    //console.log(res);
+  return res.map((test) => {
+    console.log(testReducer(test));
+    return testReducer(test);
+  });
+  //console.log(res);
 }
 //getAllTests();
 
@@ -116,26 +133,44 @@ function getToken(id) {
     expiresIn: 60 * 60
   });
   console.log(token);
-  return {token:token};
+  return { token: token };
 }
 
-function addNewUser(newUser){
+function addNewUser(newUser) {
   console.log(newUser);
   return {
-    success:true,
-    message:"Successfully added",
-    Details:newUser
-  }
+    success: true,
+    message: 'Successfully added',
+    Details: newUser
+  };
 }
 
-function getTestByToken(token)
-{
+function getTestByToken(token) {
   console.log(token);
   const decode = jwt.decode(token);
   console.log(decode);
 }
 
+function sendMail(mailDetails) {
+  console.log(mailDetails);
+  mailOptions.text = mailDetails.mailBody;
+  mailOptions.to = mailDetails.email;
+  console.log(mailOptions);
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log(('Email Sent: ', info));
+      return {
+        success: true,
+        message: 'mail sent successfully'
+      };
+    }
+  });
+}
+
 module.exports = {
+  sendMail,
   getTestByToken,
   addNewUser,
   getToken,
