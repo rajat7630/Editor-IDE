@@ -49,7 +49,7 @@
               Loading...
             {:then result}
               {#each result.data.allTests as test}
-                <li>{test.testName}</li>
+                <li><a href="http://localhost:5000/test/{test.id}">{test.testName}</a></li>
               {/each}
             {:catch err}
               Error: {err}
@@ -76,7 +76,7 @@
               Loading...
             {:then result}
               {#each result.data.allProblems as prob}
-                <li>{prob.problemName}</li>
+                <li><a href="http://localhost:5000/problem/{prob.id}">{prob.problemName}</a></li>
               {/each}
             {:catch err}
               Error: {err}

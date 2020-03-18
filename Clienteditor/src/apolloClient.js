@@ -37,7 +37,7 @@ const testByToken = gql`
 `;
 
 const sendMail = gql`
-  mutation mailSender($mailBody:String , $email:String) {
+  mutation mailSender($mailBody: String, $email: String) {
     sendMail(mailBody: $mailBody, email: $email) {
       success
       message
@@ -45,9 +45,39 @@ const sendMail = gql`
   }
 `;
 
+const getProblemById = gql`
+  query getProblemById($id: ID!) {
+    problemById(id: $id) {
+      id
+      description
+      createdAt
+      difficultyLevel
+      problemName
+    }
+  }
+`;
+
+const getTestById = gql`
+  query getTestById($id: ID!) {
+    testById(id: $id) {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        difficultyLevel
+        email
+      }
+    }
+  }
+`;
+
 export const apolloClient = {
   sendMail,
+  getTestById,
   getProblems,
+  getProblemById,
   allTests,
   getToken,
   testByToken

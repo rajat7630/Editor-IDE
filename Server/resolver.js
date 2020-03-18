@@ -17,6 +17,9 @@ module.exports = {
     testByToken:(_, {token})=>{
       return store.getTestByToken(token);
     },
+    testById:(_, {id})=>{
+      return store.getTestById(id);
+    },
 
     testByAuthor: (_, {email}) => {
       return store.getTestByAuthor(email);

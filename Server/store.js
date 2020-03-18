@@ -101,7 +101,7 @@ async function getAllProblems() {
 async function getProblemById(id) {
   const res = await Problem.query().findById(id);
   console.log(res);
-  return problemReducer(res.rows[0]);
+  return problemReducer(res);
 }
 
 async function getAllTests() {
@@ -119,6 +119,12 @@ async function getTestByAuthor(email) {
   return res.rows.map((test) => {
     return testReducer(test);
   });
+}
+
+async function getTestById(id){
+  const res= await Test.query().where("id", id);
+  console.log(res);
+  return testReducer(res[0]);
 }
 
 async function getProblemsByAuthor(email) {
@@ -170,6 +176,7 @@ function sendMail(mailDetails) {
 }
 
 module.exports = {
+  getTestById,
   sendMail,
   getTestByToken,
   addNewUser,

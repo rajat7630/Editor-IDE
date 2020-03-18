@@ -20,14 +20,14 @@ const routes = [
     component: Admin
   },
   {
-    name: '/test',
+    name: '/test/:id',
     component: Tests,
-    onlyIf: { guard: userIsAdmin, redirect: '/' }
+    // onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
-    name: '/problem',
+    name: '/problem/:id',
     component: Problems,
-    onlyIf: { guard: userIsAdmin, redirect: '/' }
+    // onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
     name: '/home',

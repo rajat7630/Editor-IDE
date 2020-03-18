@@ -42,6 +42,7 @@ const typeDefs = gql`
     allProblems: [Problem]
     problemById(id: ID!): Problem
     allTests: [Test]
+    testById(id:ID!):Test
     testByAuthor(id: ID!): [Test]
     problemsByAuthor(id: ID!): [Problem]
     testByToken(token: String): Test
