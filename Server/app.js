@@ -6,30 +6,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser());
 
-var indexRouter = require('./routes/index');
+const indexRouter = require('./routes/index');
 //var usersRouter = require("./routes/users");
-
+const clientLogin= require("./routes/client_routes.js");
 app.use('/', indexRouter);
-
-let data = [
-  {
-    id: 61167925,
-    problem: 'Write a program to find sum a array of integers',
-    test_case: '[1, 2, 3, 4, 5]',
-    test_output: '[15]',
-    solution: 'function solution() { return 0; }'
-  },
-  {
-    id: 92035553,
-    problem: 'Write  program to find product of given numbers',
-    test_case: '[1, 2, 3]',
-    test_output: '[6]',
-    solution: 'function solution() { return 1; }'
-  }
-];
-
+app.use("/test", clientLogin)
 const authenticationRouter = require('./routes/authenticationRouter');
-
+const authenticateClient= require("./routes/client_login.js");
 //app.use('/login',authenticationRouter);
 
 app.get('/', (req, res) => {

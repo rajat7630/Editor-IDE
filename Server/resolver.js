@@ -1,15 +1,26 @@
 const store = require('./store.js');
 module.exports = {
   Query: {
+    getToken: (_, { id }) => {
+      return store.getToken(id);
+    },
+
     allProblems: () => {
       return store.getAllProblems();
     },
-    problemById: (_, {id}) => {
+    problemById: (_, { id }) => {
       return store.getProblemById(id);
     },
     allTests: () => {
       return store.getAllTests();
     },
+    testByToken:(_, {token})=>{
+      return store.getTestByToken(token);
+    },
+    testById:(_, {id})=>{
+      return store.getTestById(id);
+    },
+
     testByAuthor: (_, {email}) => {
       return store.getTestByAuthor(email);
     },
@@ -17,14 +28,22 @@ module.exports = {
       return store.getProblemsByAuthor(email);
     }
   },
-    Mutation:{
-      addProblem:(_, newproblem)=>{
-        console.log(newproblem);
-        return store.addNewProblem(newproblem);
-      },
+  Mutation: {
+    addProblem: (_, newProblem ) => {
+      console.log(newProblem);
+      return store.addNewProblem(newProblem);
+    },
 
-      addTest:(_, newTest)=>{
-        return store.createNewTest(newTest);
-      }
+    addTest: (_, newTest) => {
+      return store.createNewTest(newTest);
+    },
+
+    addUser:(_,newUser)=>{
+      return store.addNewUser(newUser);
+    },
+
+    sendMail:(_, mailDetails)=>{
+      return store.sendMail(mailDetails);
     }
   }
+};

@@ -1,18 +1,23 @@
 const { gql } = require('apollo-server');
 const { ApolloServer } = require('apollo-server');
 const typeDefs = gql`
-scalar JSON
-scalar JSONObject
+  scalar JSON
+  scalar JSONObject
 
   type Problem {
     id: ID!
-    problemName :String
+    problemName: String
     description: String
     createdAt: String
     testCases: JSON
     difficultyLevel: String
-    email:String
+    email: String
   }
+
+  type Payload {
+    token: String!
+  }
+
   type Test {
     id: ID!
     testName: String
@@ -21,12 +26,11 @@ scalar JSONObject
     createdAt: String
     problems: [Problem]
   }
-  type User {
+  type Student {
     id: ID!
     email: String
     name: String
     collegeName: String
-    solution: [Solution]
   }
   type Solution {
     id: ID!
@@ -34,11 +38,14 @@ scalar JSONObject
     problem: Problem
   }
   type Query {
+    getToken(id: ID!): Payload
     allProblems: [Problem]
     problemById(id: ID!): Problem
     allTests: [Test]
-    testByAuthor(email: String): [Test]
-    problemsByAuthor(email: String): [Problem]
+    testById(id:ID!):Test
+    testByAuthor(id: ID!): [Test]
+    problemsByAuthor(id: ID!): [Problem]
+    testByToken(token: String): Test
   }
   type Mutation {
     addProblem(
@@ -53,11 +60,33 @@ scalar JSONObject
       authorId: ID
       problem: [ID]
     ): createTest
+
+    addUser(
+      name: String 
+      email: String 
+      collegeName: String
+      ): userDetails
+
+    sendMail(
+      mailBody: String 
+      email: String
+      ): mailSent
   }
-  type createTest{
-    success:Boolean,
-    message:String,
-    test:[Test]
+
+  type mailSent {
+    success: Boolean
+    message: String
+  }
+  type userDetails {
+    success: Boolean
+    message: String
+    Details: Student
+  }
+
+  type createTest {
+    success: Boolean
+    message: String
+    test: [Test]
   }
   type addNewProblem {
     success: Boolean!
@@ -67,4 +96,3 @@ scalar JSONObject
 `;
 
 module.exports = typeDefs;
-

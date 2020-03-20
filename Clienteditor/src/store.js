@@ -171,6 +171,7 @@ function deleteTab(id) {
     });
   });
 }
+
 export const dataStore = {
   subscribe,
   activate,
