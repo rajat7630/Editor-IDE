@@ -11,7 +11,7 @@ const { subscribe, update } = writable([
   },
 ]);
 function updateData() {
-  fetch('http://server.rajat.local/allData', {
+  fetch('http://localhost:3000/allData', {
     method: 'GET',
   })
     .then(res => {
@@ -45,7 +45,7 @@ function add() {
     test_output: '[]',
     solution: 'function solution() { return 1; }',
   };
-  fetch('http://server.rajat.local/addNewProblem', {
+  fetch('http://localhost:3000/addNewProblem', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -68,7 +68,7 @@ function add() {
 }
 
 function newProblemData(id, newData) {
-  fetch('http://server.rajat.local/problem/' + id, {
+  fetch('http://localhost:3000/problem/' + id, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -92,7 +92,7 @@ function newProblemData(id, newData) {
 }
 
 function updateSolution(id, solution) {
-  fetch('http://server.rajat.local/updateSolution/' + id, {
+  fetch('http://localhost:3000/updateSolution/' + id, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -112,7 +112,7 @@ function updateSolution(id, solution) {
 }
 
 function updateTestInput(id, value) {
-  fetch('http://server.rajat.local/updateSolution/' + id, {
+  fetch('http://localhost:3000/updateSolution/' + id, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -132,7 +132,7 @@ function updateTestInput(id, value) {
 }
 
 function updateTestOutput(id, value) {
-  fetch('http://server.rajat.local/updateSolution/' + id, {
+  fetch('http://localhost:3000/updateSolution/' + id, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -163,7 +163,7 @@ function changeDataUpdate(id) {
 }
 
 function deleteTab(id) {
-  fetch('http://server.rajat.local/problem/' + id, {
+  fetch('http://localhost:3000/problem/' + id, {
     method: 'DELETE',
   }).then(res => {
     return update(tabs => {

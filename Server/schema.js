@@ -1,49 +1,45 @@
 const { gql } = require('apollo-server');
 const { ApolloServer } = require('apollo-server');
 const typeDefs = gql`
+scalar JSON
+scalar JSONObject
+
   type Problem {
     id: ID!
+    problemName :String
     description: String
-    testCase: String
-    output: String
-    creationDate: String
-    author: Author
+    createdAt: String
+    testCases: JSON
+    difficultyLevel: String
+    email:String
   }
-
   type Test {
     id: ID!
     testName: String
-    difficulty: String
-    author: Author
-    creationDate: String
+    difficultyLevel: String
+    email: String
+    createdAt: String
     problems: [Problem]
   }
-
-  type Author {
+  type User {
     id: ID!
     email: String
-  }
-
-  type Student {
-    id: ID!
-    email: String
+    name: String
+    collegeName: String
     solution: [Solution]
   }
-
   type Solution {
     id: ID!
     solution: String
     problem: Problem
   }
-
   type Query {
     allProblems: [Problem]
     problemById(id: ID!): Problem
     allTests: [Test]
-    testByAuthor(id: ID!): [Test]
-    problemsByAuthor(id: ID!): [Problem]
+    testByAuthor(email: String): [Test]
+    problemsByAuthor(email: String): [Problem]
   }
-
   type Mutation {
     addProblem(
       description: String
@@ -51,7 +47,6 @@ const typeDefs = gql`
       output: String
       authorId: ID
     ): addNewProblem!
-
     addTest(
       testName: String
       difficulty: String
@@ -59,13 +54,11 @@ const typeDefs = gql`
       problem: [ID]
     ): createTest
   }
-
   type createTest{
     success:Boolean,
     message:String,
     test:[Test]
   }
-
   type addNewProblem {
     success: Boolean!
     message: String
@@ -74,3 +67,4 @@ const typeDefs = gql`
 `;
 
 module.exports = typeDefs;
+

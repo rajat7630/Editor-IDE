@@ -10,11 +10,11 @@ module.exports = {
     allTests: () => {
       return store.getAllTests();
     },
-    testByAuthor: (_, {id}) => {
-      return store.getTestByAuthor(id);
+    testByAuthor: (_, {email}) => {
+      return store.getTestByAuthor(email);
     },
-    problemsByAuthor:(_, {id})=>{
-      return store.getProblemsByAuthor(id);
+    problemsByAuthor:(_, {email})=>{
+      return store.getProblemsByAuthor(email);
     }
   },
     Mutation:{

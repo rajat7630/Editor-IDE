@@ -52,13 +52,18 @@ router.get(
         redis.print
         );
 
-		res.redirect("http://client.rajat.local/admin?token=" + token);
+        res.cookie('access_token', token1, {
+          httpOnly:false
+        });
+
+		res.redirect("http://localhost:5000/admin?token=" + token);
 	}
 );
 
 router.get('/logout', function(req, res){
     req.logout();
-    res.redirect('http://client.rajat.local');
+    res.clearCookie("access_token");
+    res.redirect('http://localhost:5000');
   });
 
 

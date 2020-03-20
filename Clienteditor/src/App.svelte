@@ -1,9 +1,11 @@
 <script>
+ // import { Router, Link, Route } from "svelte-routing";
 
-  import { Router, Link, Route } from "svelte-routing";
-  import Home from "./Home.svelte";
-  import Admin from "./routes/Admin.svelte";;
-  import Login from "./routes/Login.svelte"
+
+//Routes
+  import { Router } from 'svelte-router-spa'
+  import { routes } from './routes'
+
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
@@ -17,7 +19,7 @@
   import gql from "graphql-tag";
   const cache = new InMemoryCache();
   const link = new HttpLink({
-    uri: "http://localhost:4000/"
+    uri: "http://localhost:3000/graphql/"
   });
   const client = new ApolloClient({
     link,
@@ -29,6 +31,11 @@
   onMount(() => {
     dataStore.updateData();
   });
+
+  var isAdmin = () => {
+   
+  }
+  console.log(isAdmin());
 </script>
 
 <svelte:window
@@ -62,13 +69,4 @@
       dataStore.deleteTab(id);
     }
   }} />
-<div class="flex flex-col w-full">
-  <Tabs />
-</div>
-<Router>
-  <div>
-    <Route path="/admin" component="{Admin}" />
-    <Route path="/home" component="{Home}"/>
-    <Route path="/" component="{Admin}"/>
-  </div>
-</Router>
+<Router {routes} />
