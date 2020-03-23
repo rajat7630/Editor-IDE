@@ -3,12 +3,13 @@
 module.exports = {
 
   development: {
-    client: 'pg',
+    client: 'postgresql',
     connection: {
-      database: 'tryout',
-      user:     'postgres',
-      password: 'newPassword',
-      host:'localhost'
+      user : 'postgres',
+      password : 'postgres',
+      host:'localhost',
+      port: '5432',
+      database:'try_out'
     }
   },
 

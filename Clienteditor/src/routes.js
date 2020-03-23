@@ -9,25 +9,30 @@ function userIsAdmin() {
   //check if user is admin and returns true or false
   return document.cookie ? true : false;
 }
+function notAdmin(){
+  return document.cookie ? false : true;
+}
 
 const routes = [
   {
     name: '/',
-    component: Login
+    component: Login,
+    onlyIf: { guard: notAdmin,redirect: '/admin' }
   },
   {
     name: '/admin',
-    component: Admin
+    component: Admin,
+    onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
     name: '/test/:id',
     component: Tests,
-    // onlyIf: { guard: userIsAdmin, redirect: '/' }
+   onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
     name: '/problem/:id',
     component: Problems,
-    // onlyIf: { guard: userIsAdmin, redirect: '/' }
+    onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
     name: '/home',
@@ -36,11 +41,13 @@ const routes = [
   },
   {
     name:'/sendtest/:id',
-    component:SendTest
+    component:SendTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' }
   },
   {
     name:'/givetest/:token',
-    component:GiveTest
+    component:GiveTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' }
   }
 ];
 
