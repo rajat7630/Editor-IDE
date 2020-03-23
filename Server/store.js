@@ -90,7 +90,7 @@ async function testReducer(test) {
 async function getAllProblems() {
   const res = await Problem.query();
   return res.map((problem) => {
-    console.log(problemReducer(problem));
+       console.log(problemReducer(problem));
     return problemReducer(problem);
   });
   //console.log(res);
