@@ -11,6 +11,10 @@
     query: apolloClient.getTestById,
     variables: { id: currentRoute.namedParams.id }
   });
+  let Problem = query(client, { query: apolloClient.getProblems });
+
+
+  let problems = [];
 </script>
 
 <style>
@@ -40,11 +44,13 @@
 
   <Navbar />
   <!-- style="margin-left:23%;margin-top:7%; -->
-  {#await $test}
+  <div class="flex mb-4">
+    <div class="w-1/2 h-12">
+    {#await $test}
     Loading ...
   {:then result}
-    <div class="p-8 mx-56 mt-24 items-center">
-      <div class="w-auto rounded overflow-hidden shadow-lg">
+    <div class="p-8 mx-2 mt-24 items-center">
+      <div class="max-w-auto rounded overflow-hidden shadow-lg">
         <div class="px-12 py-8">
 
           <br class="my-24" />
@@ -56,11 +62,18 @@
               </div>
             </div>
             <div class="flex-initial px-4 py-2 m-2">
+             <div class="flex">
               <button
                 class="bg-red-500 hover:bg-red-700 text-white font-bold py-2
                 px-4 border border-red-700 rounded">
                 Edit
               </button>
+               <button
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2
+                px-4 border border-blue-700 rounded">
+                Save
+              </button>
+            </div>
             </div>
           </div>
 
@@ -81,7 +94,16 @@
                 </a>
               </li>
             {/each}
-          </ul>
+            {#each problems as pb}
+            <li class="test-sl mb-2">
+              <a
+                  target="_blank"
+                  href="http://localhost:5000/problem/{pb.id}">
+                  {pb.problemName}
+                </a>
+            </li>
+            {/each}
+                     </ul>
 
         </div>
 
@@ -91,5 +113,35 @@
   {:catch err}
     Error : {err}
   {/await}
+    </div>
+    <div class="w-1/2 h-12">
+    <div class="p-8 mx-2 mt-24 items-center">
+      <div class="max-w-auto rounded overflow-hidden shadow-lg">
+       <div class="px-6 py-4">
+       <div class="flex">
+          <div class="flex-initial text-center px-4 py-2 m-2">
+              <div class="font-bold text-3xl mb-2">
+                All Problems
+              </div>
+            </div>
+       </div>
+          <ol>
+            {#await $Problem}
+              Loading...
+            {:then result}
+              {#each result.data.allProblems as prob}
+              <label>
+                <li><a href="http://localhost:5000/problem/{prob.id}"><input type=checkbox bind:group={problems} value={prob}>       {prob.problemName}</a></li>
+                </label>
+              {/each}
+            {:catch err}
+              Error: {err}
+            {/await}
+          </ol>
+          </div>
+          </div>
+        </div>
+        </div>
+  </div>
 
 </body>

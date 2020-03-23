@@ -120,6 +120,14 @@ var app = (function () {
         else if (node.getAttribute(attribute) !== value)
             node.setAttribute(attribute, value);
     }
+    function get_binding_group_value(group) {
+        const value = [];
+        for (let i = 0; i < group.length; i += 1) {
+            if (group[i].checked)
+                value.push(group[i].__value);
+        }
+        return value;
+    }
     function children(element) {
         return Array.from(element.childNodes);
     }
@@ -35282,14 +35290,26 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[6] = list[i];
+    	child_ctx[11] = list[i];
     	return child_ctx;
     }
 
-    // (91:2) {:catch err}
-    function create_catch_block$2(ctx) {
+    function get_each_context_1$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[14] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[17] = list[i];
+    	return child_ctx;
+    }
+
+    // (113:2) {:catch err}
+    function create_catch_block_1$1(ctx) {
     	let t0;
-    	let t1_value = /*err*/ ctx[5] + "";
+    	let t1_value = /*err*/ ctx[10] + "";
     	let t1;
 
     	const block = {
@@ -35302,7 +35322,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, t1, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$test*/ 1 && t1_value !== (t1_value = /*err*/ ctx[5] + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$test*/ 2 && t1_value !== (t1_value = /*err*/ ctx[10] + "")) set_data_dev(t1, t1_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(t0);
@@ -35312,160 +35332,217 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$2.name,
+    		id: create_catch_block_1$1.name,
     		type: "catch",
-    		source: "(91:2) {:catch err}",
+    		source: "(113:2) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (45:2) {:then result}
-    function create_then_block$2(ctx) {
+    // (51:2) {:then result}
+    function create_then_block_1$1(ctx) {
+    	let div7;
     	let div6;
     	let div5;
-    	let div4;
     	let br0;
     	let t0;
-    	let div3;
+    	let div4;
     	let div1;
     	let div0;
-    	let t1_value = /*result*/ ctx[4].data.testById.testName + "";
+    	let t1_value = /*result*/ ctx[9].data.testById.testName + "";
     	let t1;
     	let t2;
+    	let div3;
     	let div2;
-    	let button;
+    	let button0;
     	let t4;
-    	let p0;
+    	let button1;
     	let t6;
-    	let p1;
-    	let t7_value = /*result*/ ctx[4].data.testById.difficultyLevel + "";
-    	let t7;
+    	let p0;
     	let t8;
-    	let br1;
+    	let p1;
+    	let t9_value = /*result*/ ctx[9].data.testById.difficultyLevel + "";
     	let t9;
-    	let br2;
     	let t10;
-    	let p2;
+    	let br1;
+    	let t11;
+    	let br2;
     	let t12;
+    	let p2;
+    	let t14;
     	let ul;
-    	let each_value = /*result*/ ctx[4].data.testById.problems;
+    	let t15;
+    	let each_value_2 = /*result*/ ctx[9].data.testById.problems;
+    	let each_blocks_1 = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks_1[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
+    	let each_value_1 = /*problems*/ ctx[0];
     	let each_blocks = [];
 
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
     	}
 
     	const block = {
     		c: function create() {
+    			div7 = element("div");
     			div6 = element("div");
     			div5 = element("div");
-    			div4 = element("div");
     			br0 = element("br");
     			t0 = space();
-    			div3 = element("div");
+    			div4 = element("div");
     			div1 = element("div");
     			div0 = element("div");
     			t1 = text(t1_value);
     			t2 = space();
+    			div3 = element("div");
     			div2 = element("div");
-    			button = element("button");
-    			button.textContent = "Edit";
+    			button0 = element("button");
+    			button0.textContent = "Edit";
     			t4 = space();
+    			button1 = element("button");
+    			button1.textContent = "Save";
+    			t6 = space();
     			p0 = element("p");
     			p0.textContent = "Test Instructions :";
-    			t6 = space();
-    			p1 = element("p");
-    			t7 = text(t7_value);
     			t8 = space();
-    			br1 = element("br");
-    			t9 = space();
-    			br2 = element("br");
+    			p1 = element("p");
+    			t9 = text(t9_value);
     			t10 = space();
+    			br1 = element("br");
+    			t11 = space();
+    			br2 = element("br");
+    			t12 = space();
     			p2 = element("p");
     			p2.textContent = "Problems :";
-    			t12 = space();
+    			t14 = space();
     			ul = element("ul");
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].c();
+    			}
+
+    			t15 = space();
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
     			attr_dev(br0, "class", "my-24");
-    			add_location(br0, file$e, 49, 10, 1182);
+    			add_location(br0, file$e, 55, 10, 1333);
     			attr_dev(div0, "class", "font-bold text-3xl mb-2");
-    			add_location(div0, file$e, 53, 14, 1312);
+    			add_location(div0, file$e, 59, 14, 1463);
     			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div1, file$e, 52, 12, 1245);
-    			attr_dev(button, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded svelte-xh1oyn");
-    			add_location(button, file$e, 58, 14, 1505);
-    			attr_dev(div2, "class", "flex-initial px-4 py-2 m-2");
-    			add_location(div2, file$e, 57, 12, 1450);
-    			attr_dev(div3, "class", "flex");
-    			add_location(div3, file$e, 51, 10, 1214);
+    			add_location(div1, file$e, 58, 12, 1396);
+    			attr_dev(button0, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded svelte-xh1oyn");
+    			add_location(button0, file$e, 65, 14, 1688);
+    			attr_dev(button1, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2\n                px-4 border border-blue-700 rounded svelte-xh1oyn");
+    			add_location(button1, file$e, 70, 15, 1886);
+    			attr_dev(div2, "class", "flex");
+    			add_location(div2, file$e, 64, 13, 1655);
+    			attr_dev(div3, "class", "flex-initial px-4 py-2 m-2");
+    			add_location(div3, file$e, 63, 12, 1601);
+    			attr_dev(div4, "class", "flex");
+    			add_location(div4, file$e, 57, 10, 1365);
     			attr_dev(p0, "class", "font-bold text-2xl mb-2");
-    			add_location(p0, file$e, 66, 10, 1735);
+    			add_location(p0, file$e, 79, 10, 2138);
     			attr_dev(p1, "class", "text-gray-700 text-2xl");
-    			add_location(p1, file$e, 67, 10, 1804);
-    			add_location(br1, file$e, 70, 10, 1915);
-    			add_location(br2, file$e, 71, 10, 1932);
+    			add_location(p1, file$e, 80, 10, 2207);
+    			add_location(br1, file$e, 83, 10, 2318);
+    			add_location(br2, file$e, 84, 10, 2335);
     			attr_dev(p2, "class", "font-bold text-2xl mb-2");
-    			add_location(p2, file$e, 72, 10, 1949);
-    			add_location(ul, file$e, 73, 10, 2009);
-    			attr_dev(div4, "class", "px-12 py-8");
-    			add_location(div4, file$e, 47, 8, 1146);
-    			attr_dev(div5, "class", "w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div5, file$e, 46, 6, 1083);
-    			attr_dev(div6, "class", "p-8 mx-56 mt-24 items-center");
-    			add_location(div6, file$e, 45, 4, 1034);
+    			add_location(p2, file$e, 85, 10, 2352);
+    			add_location(ul, file$e, 86, 10, 2412);
+    			attr_dev(div5, "class", "px-12 py-8");
+    			add_location(div5, file$e, 53, 8, 1297);
+    			attr_dev(div6, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div6, file$e, 52, 6, 1230);
+    			attr_dev(div7, "class", "p-8 mx-2 mt-24 items-center");
+    			add_location(div7, file$e, 51, 4, 1182);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div6, anchor);
+    			insert_dev(target, div7, anchor);
+    			append_dev(div7, div6);
     			append_dev(div6, div5);
+    			append_dev(div5, br0);
+    			append_dev(div5, t0);
     			append_dev(div5, div4);
-    			append_dev(div4, br0);
-    			append_dev(div4, t0);
-    			append_dev(div4, div3);
-    			append_dev(div3, div1);
+    			append_dev(div4, div1);
     			append_dev(div1, div0);
     			append_dev(div0, t1);
-    			append_dev(div3, t2);
+    			append_dev(div4, t2);
+    			append_dev(div4, div3);
     			append_dev(div3, div2);
-    			append_dev(div2, button);
-    			append_dev(div4, t4);
-    			append_dev(div4, p0);
-    			append_dev(div4, t6);
-    			append_dev(div4, p1);
-    			append_dev(p1, t7);
-    			append_dev(div4, t8);
-    			append_dev(div4, br1);
-    			append_dev(div4, t9);
-    			append_dev(div4, br2);
-    			append_dev(div4, t10);
-    			append_dev(div4, p2);
-    			append_dev(div4, t12);
-    			append_dev(div4, ul);
+    			append_dev(div2, button0);
+    			append_dev(div2, t4);
+    			append_dev(div2, button1);
+    			append_dev(div5, t6);
+    			append_dev(div5, p0);
+    			append_dev(div5, t8);
+    			append_dev(div5, p1);
+    			append_dev(p1, t9);
+    			append_dev(div5, t10);
+    			append_dev(div5, br1);
+    			append_dev(div5, t11);
+    			append_dev(div5, br2);
+    			append_dev(div5, t12);
+    			append_dev(div5, p2);
+    			append_dev(div5, t14);
+    			append_dev(div5, ul);
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].m(ul, null);
+    			}
+
+    			append_dev(ul, t15);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(ul, null);
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$test*/ 1 && t1_value !== (t1_value = /*result*/ ctx[4].data.testById.testName + "")) set_data_dev(t1, t1_value);
-    			if (dirty & /*$test*/ 1 && t7_value !== (t7_value = /*result*/ ctx[4].data.testById.difficultyLevel + "")) set_data_dev(t7, t7_value);
+    			if (dirty & /*$test*/ 2 && t1_value !== (t1_value = /*result*/ ctx[9].data.testById.testName + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$test*/ 2 && t9_value !== (t9_value = /*result*/ ctx[9].data.testById.difficultyLevel + "")) set_data_dev(t9, t9_value);
 
-    			if (dirty & /*$test*/ 1) {
-    				each_value = /*result*/ ctx[4].data.testById.problems;
+    			if (dirty & /*$test*/ 2) {
+    				each_value_2 = /*result*/ ctx[9].data.testById.problems;
     				let i;
 
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$2(ctx, each_value, i);
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks_1[i]) {
+    						each_blocks_1[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_1[i] = create_each_block_2(child_ctx);
+    						each_blocks_1[i].c();
+    						each_blocks_1[i].m(ul, t15);
+    					}
+    				}
+
+    				for (; i < each_blocks_1.length; i += 1) {
+    					each_blocks_1[i].d(1);
+    				}
+
+    				each_blocks_1.length = each_value_2.length;
+    			}
+
+    			if (dirty & /*problems*/ 1) {
+    				each_value_1 = /*problems*/ ctx[0];
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$2(child_ctx);
+    						each_blocks[i] = create_each_block_1$1(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(ul, null);
     					}
@@ -35475,31 +35552,79 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					each_blocks[i].d(1);
     				}
 
-    				each_blocks.length = each_value.length;
+    				each_blocks.length = each_value_1.length;
     			}
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div6);
+    			if (detaching) detach_dev(div7);
+    			destroy_each(each_blocks_1, detaching);
     			destroy_each(each_blocks, detaching);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$2.name,
+    		id: create_then_block_1$1.name,
     		type: "then",
-    		source: "(45:2) {:then result}",
+    		source: "(51:2) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (75:12) {#each result.data.testById.problems as problem}
-    function create_each_block$2(ctx) {
+    // (88:12) {#each result.data.testById.problems as problem}
+    function create_each_block_2(ctx) {
     	let li;
     	let a;
-    	let t0_value = /*problem*/ ctx[6].problemName + "";
+    	let t_value = /*problem*/ ctx[17].problemName + "";
+    	let t;
+    	let a_href_value;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			a = element("a");
+    			t = text(t_value);
+    			attr_dev(a, "target", "_blank");
+    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[17].id);
+    			add_location(a, file$e, 89, 16, 2534);
+    			attr_dev(li, "class", "text-xl mb-2");
+    			add_location(li, file$e, 88, 14, 2492);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, a);
+    			append_dev(a, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$test*/ 2 && t_value !== (t_value = /*problem*/ ctx[17].problemName + "")) set_data_dev(t, t_value);
+
+    			if (dirty & /*$test*/ 2 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[17].id)) {
+    				attr_dev(a, "href", a_href_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2.name,
+    		type: "each",
+    		source: "(88:12) {#each result.data.testById.problems as problem}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (97:12) {#each problems as pb}
+    function create_each_block_1$1(ctx) {
+    	let li;
+    	let a;
+    	let t0_value = /*pb*/ ctx[14].problemName + "";
     	let t0;
     	let a_href_value;
     	let t1;
@@ -35511,10 +35636,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(a, "target", "_blank");
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[6].id);
-    			add_location(a, file$e, 76, 16, 2131);
-    			attr_dev(li, "class", "text-xl mb-2");
-    			add_location(li, file$e, 75, 14, 2089);
+    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*pb*/ ctx[14].id);
+    			add_location(a, file$e, 98, 14, 2828);
+    			attr_dev(li, "class", "test-sl mb-2");
+    			add_location(li, file$e, 97, 12, 2788);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -35523,9 +35648,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(li, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$test*/ 1 && t0_value !== (t0_value = /*problem*/ ctx[6].problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*problems*/ 1 && t0_value !== (t0_value = /*pb*/ ctx[14].problemName + "")) set_data_dev(t0, t0_value);
 
-    			if (dirty & /*$test*/ 1 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[6].id)) {
+    			if (dirty & /*problems*/ 1 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*pb*/ ctx[14].id)) {
     				attr_dev(a, "href", a_href_value);
     			}
     		},
@@ -35536,17 +35661,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$2.name,
+    		id: create_each_block_1$1.name,
     		type: "each",
-    		source: "(75:12) {#each result.data.testById.problems as problem}",
+    		source: "(97:12) {#each problems as pb}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (43:16)      Loading ...   {:then result}
-    function create_pending_block$2(ctx) {
+    // (49:18)      Loading ...   {:then result}
+    function create_pending_block_1$1(ctx) {
     	let t;
 
     	const block = {
@@ -35564,9 +35689,217 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
+    		id: create_pending_block_1$1.name,
+    		type: "pending",
+    		source: "(49:18)      Loading ...   {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (137:12) {:catch err}
+    function create_catch_block$2(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[10] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem*/ 4 && t1_value !== (t1_value = /*err*/ ctx[10] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$2.name,
+    		type: "catch",
+    		source: "(137:12) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (131:12) {:then result}
+    function create_then_block$2(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[9].data.allProblems;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem, problems*/ 5) {
+    				each_value = /*result*/ ctx[9].data.allProblems;
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$2(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$2.name,
+    		type: "then",
+    		source: "(131:12) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (132:14) {#each result.data.allProblems as prob}
+    function create_each_block$2(ctx) {
+    	let label;
+    	let li;
+    	let a;
+    	let input;
+    	let input_value_value;
+    	let t0;
+    	let t1_value = /*prob*/ ctx[11].problemName + "";
+    	let t1;
+    	let a_href_value;
+    	let t2;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			label = element("label");
+    			li = element("li");
+    			a = element("a");
+    			input = element("input");
+    			t0 = space();
+    			t1 = text(t1_value);
+    			t2 = space();
+    			attr_dev(input, "type", "checkbox");
+    			input.__value = input_value_value = /*prob*/ ctx[11];
+    			input.value = input.__value;
+    			/*$$binding_groups*/ ctx[8][0].push(input);
+    			add_location(input, file$e, 133, 70, 3785);
+    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[11].id);
+    			add_location(a, file$e, 133, 20, 3735);
+    			add_location(li, file$e, 133, 16, 3731);
+    			add_location(label, file$e, 132, 14, 3707);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, label, anchor);
+    			append_dev(label, li);
+    			append_dev(li, a);
+    			append_dev(a, input);
+    			input.checked = ~/*problems*/ ctx[0].indexOf(input.__value);
+    			append_dev(a, t0);
+    			append_dev(a, t1);
+    			append_dev(label, t2);
+    			dispose = listen_dev(input, "change", /*input_change_handler*/ ctx[7]);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problem*/ 4 && input_value_value !== (input_value_value = /*prob*/ ctx[11])) {
+    				prop_dev(input, "__value", input_value_value);
+    			}
+
+    			input.value = input.__value;
+
+    			if (dirty & /*problems*/ 1) {
+    				input.checked = ~/*problems*/ ctx[0].indexOf(input.__value);
+    			}
+
+    			if (dirty & /*$Problem*/ 4 && t1_value !== (t1_value = /*prob*/ ctx[11].problemName + "")) set_data_dev(t1, t1_value);
+
+    			if (dirty & /*$Problem*/ 4 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[11].id)) {
+    				attr_dev(a, "href", a_href_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(label);
+    			/*$$binding_groups*/ ctx[8][0].splice(/*$$binding_groups*/ ctx[8][0].indexOf(input), 1);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$2.name,
+    		type: "each",
+    		source: "(132:14) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (129:29)                Loading...             {:then result}
+    function create_pending_block$2(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
     		id: create_pending_block$2.name,
     		type: "pending",
-    		source: "(43:16)      Loading ...   {:then result}",
+    		source: "(129:29)                Loading...             {:then result}",
     		ctx
     	});
 
@@ -35578,7 +35911,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t0;
     	let body;
     	let t1;
+    	let div8;
+    	let div0;
     	let promise;
+    	let t2;
+    	let div7;
+    	let div6;
+    	let div5;
+    	let div4;
+    	let div3;
+    	let div2;
+    	let div1;
+    	let t4;
+    	let ol;
+    	let promise_1;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
 
@@ -35586,14 +35932,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
+    		pending: create_pending_block_1$1,
+    		then: create_then_block_1$1,
+    		catch: create_catch_block_1$1,
+    		value: 9,
+    		error: 10
+    	};
+
+    	handle_promise(promise = /*$test*/ ctx[1], info);
+
+    	let info_1 = {
+    		ctx,
+    		current: null,
+    		token: null,
     		pending: create_pending_block$2,
     		then: create_then_block$2,
     		catch: create_catch_block$2,
-    		value: 4,
-    		error: 5
+    		value: 9,
+    		error: 10
     	};
 
-    	handle_promise(promise = /*$test*/ ctx[0], info);
+    	handle_promise(promise_1 = /*$Problem*/ ctx[2], info_1);
 
     	const block = {
     		c: function create() {
@@ -35602,11 +35961,44 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			body = element("body");
     			create_component(navbar.$$.fragment);
     			t1 = space();
+    			div8 = element("div");
+    			div0 = element("div");
     			info.block.c();
+    			t2 = space();
+    			div7 = element("div");
+    			div6 = element("div");
+    			div5 = element("div");
+    			div4 = element("div");
+    			div3 = element("div");
+    			div2 = element("div");
+    			div1 = element("div");
+    			div1.textContent = "All Problems";
+    			t4 = space();
+    			ol = element("ol");
+    			info_1.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$e, 35, 0, 816);
-    			add_location(body, file$e, 38, 0, 910);
+    			add_location(link, file$e, 39, 0, 907);
+    			attr_dev(div0, "class", "w-1/2 h-12");
+    			add_location(div0, file$e, 47, 4, 1101);
+    			attr_dev(div1, "class", "font-bold text-3xl mb-2");
+    			add_location(div1, file$e, 122, 14, 3421);
+    			attr_dev(div2, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div2, file$e, 121, 10, 3354);
+    			attr_dev(div3, "class", "flex");
+    			add_location(div3, file$e, 120, 7, 3325);
+    			add_location(ol, file$e, 127, 10, 3552);
+    			attr_dev(div4, "class", "px-6 py-4");
+    			add_location(div4, file$e, 119, 7, 3294);
+    			attr_dev(div5, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div5, file$e, 118, 6, 3228);
+    			attr_dev(div6, "class", "p-8 mx-2 mt-24 items-center");
+    			add_location(div6, file$e, 117, 4, 3180);
+    			attr_dev(div7, "class", "w-1/2 h-12");
+    			add_location(div7, file$e, 116, 4, 3151);
+    			attr_dev(div8, "class", "flex mb-4");
+    			add_location(div8, file$e, 46, 2, 1073);
+    			add_location(body, file$e, 42, 0, 1001);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35617,19 +36009,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, body, anchor);
     			mount_component(navbar, body, null);
     			append_dev(body, t1);
-    			info.block.m(body, info.anchor = null);
-    			info.mount = () => body;
+    			append_dev(body, div8);
+    			append_dev(div8, div0);
+    			info.block.m(div0, info.anchor = null);
+    			info.mount = () => div0;
     			info.anchor = null;
+    			append_dev(div8, t2);
+    			append_dev(div8, div7);
+    			append_dev(div7, div6);
+    			append_dev(div6, div5);
+    			append_dev(div5, div4);
+    			append_dev(div4, div3);
+    			append_dev(div3, div2);
+    			append_dev(div2, div1);
+    			append_dev(div4, t4);
+    			append_dev(div4, ol);
+    			info_1.block.m(ol, info_1.anchor = null);
+    			info_1.mount = () => ol;
+    			info_1.anchor = null;
     			current = true;
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
     			info.ctx = ctx;
 
-    			if (dirty & /*$test*/ 1 && promise !== (promise = /*$test*/ ctx[0]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$test*/ 2 && promise !== (promise = /*$test*/ ctx[1]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[4] = info.resolved;
+    				child_ctx[9] = info.resolved;
     				info.block.p(child_ctx, dirty);
+    			}
+
+    			info_1.ctx = ctx;
+
+    			if (dirty & /*$Problem*/ 4 && promise_1 !== (promise_1 = /*$Problem*/ ctx[2]) && handle_promise(promise_1, info_1)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[9] = info_1.resolved;
+    				info_1.block.p(child_ctx, dirty);
     			}
     		},
     		i: function intro(local) {
@@ -35649,6 +36064,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.d();
     			info.token = null;
     			info = null;
+    			info_1.block.d();
+    			info_1.token = null;
+    			info_1 = null;
     		}
     	};
 
@@ -35665,6 +36083,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     function instance$c($$self, $$props, $$invalidate) {
     	let $test;
+    	let $Problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	const client = getClient();
@@ -35675,33 +36094,63 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	validate_store(test, "test");
-    	component_subscribe($$self, test, value => $$invalidate(0, $test = value));
+    	component_subscribe($$self, test, value => $$invalidate(1, $test = value));
+    	let Problem = query(client, { query: apolloClient.getProblems });
+    	validate_store(Problem, "Problem");
+    	component_subscribe($$self, Problem, value => $$invalidate(2, $Problem = value));
+    	let problems = [];
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<Tests> was created with unknown prop '${key}'`);
     	});
 
+    	const $$binding_groups = [[]];
+
+    	function input_change_handler() {
+    		problems = get_binding_group_value($$binding_groups[0]);
+    		$$invalidate(0, problems);
+    	}
+
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
     	$$self.$capture_state = () => {
-    		return { currentRoute, $test };
+    		return {
+    			currentRoute,
+    			Problem,
+    			problems,
+    			$test,
+    			$Problem
+    		};
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
+    		if ("Problem" in $$props) $$invalidate(4, Problem = $$props.Problem);
+    		if ("problems" in $$props) $$invalidate(0, problems = $$props.problems);
     		if ("$test" in $$props) test.set($test = $$props.$test);
+    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
     	};
 
-    	return [$test, test, currentRoute];
+    	return [
+    		problems,
+    		$test,
+    		$Problem,
+    		test,
+    		Problem,
+    		currentRoute,
+    		client,
+    		input_change_handler,
+    		$$binding_groups
+    	];
     }
 
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$c, create_fragment$g, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$c, create_fragment$g, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -35713,7 +36162,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
+    		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
     			console_1$1.warn("<Tests> was created without expected prop 'currentRoute'");
     		}
     	}
