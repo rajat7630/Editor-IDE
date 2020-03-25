@@ -71,17 +71,16 @@ const addProblem = gql`
       problemName
     }
   }
-  }
+}
 `;
 const addTest = gql`
   mutation addNewTest(
       $testName:String,
       $difficultyLevel: String,
       $email: String
-  )
+  ) 
   {
-    
-  }addTest(
+  addTest(
     data:{
       testName: $testName,
       difficultyLevel: $difficultyLevel,
@@ -96,6 +95,7 @@ const addTest = gql`
       testName
     }
   }
+}
 `;
 const addUser = gql`
   mutation addNewUser(
@@ -121,7 +121,7 @@ const addUser = gql`
       collegeName
     }
   }
-  }
+}
 `;
 
 const getProblemById = gql`

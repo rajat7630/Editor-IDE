@@ -24,7 +24,7 @@ const typeDefs = gql`
     difficultyLevel: String
     email: String
     createdAt: String
-    problems: [Problem]
+    problems :[Problem]
   }
   type User {
     id: ID!
