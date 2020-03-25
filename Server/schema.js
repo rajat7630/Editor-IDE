@@ -26,7 +26,7 @@ const typeDefs = gql`
     createdAt: String
     problems: [Problem]
   }
-  type Student {
+  type User {
     id: ID!
     email: String
     name: String
@@ -48,50 +48,46 @@ const typeDefs = gql`
     testByToken(token: String): Test
   }
   type Mutation {
-    addProblem(
+    addProblem(data:addProblemInputs):addProblemOutput!
+    addTest(data:addTestInputs):addTestOutput!
+    addUser(data:addUserInputs):userDetail
+    sendMail(mailBody: String, email: String):mailSent
+  }
+  input addProblemInputs {
+      problemName: String
       description: String
-      testCase: String
-      output: String
-      authorId: ID
-    ): addNewProblem!
-    addTest(
+      problemTests:JSON
+      difficultyLevel: String
+      email: String
+    }
+  input addTestInputs {
       testName: String
-      difficulty: String
-      authorId: ID
-      problem: [ID]
-    ): createTest
-
-    addUser(
+      difficultyLevel: String
+      email:String
+  }
+  input addUserInputs {
       name: String 
       email: String 
       collegeName: String
-      ): userDetails
-
-    sendMail(
-      mailBody: String 
-      email: String
-      ): mailSent
   }
-
+  type addProblemOutput {
+    success: Boolean!
+    message: String
+    problems: [Problem]
+  }
+  type addTestOutput {
+    success: Boolean
+    message: String
+    tests: [Test]
+  }
+  type userDetail {
+    success: Boolean
+    message: String
+    user: User!
+  }
   type mailSent {
     success: Boolean
     message: String
-  }
-  type userDetails {
-    success: Boolean
-    message: String
-    Details: Student
-  }
-
-  type createTest {
-    success: Boolean
-    message: String
-    test: [Test]
-  }
-  type addNewProblem {
-    success: Boolean!
-    message: String
-    Problems: [Problem]
   }
 `;
 

@@ -1,8 +1,10 @@
 const Problem = require('./models/Problem');
 const TestProblem = require('./models/TestProblem');
 const Test = require('./models/Test');
-const jwt = require('jsonwebtoken');
+const User = require('./models/User');
 //const Attempt = require('./models/Attempt');
+
+const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   service: 'Gmail',
@@ -33,25 +35,47 @@ async function addNewProblem(problem) {
     return {
       success: true,
       message: 'Problem Added Successfully',
-      Problems: getAllProblems()
+      problems: getAllProblems()
     };
   } catch (error) {
     console.log(error);
   }
 }
 
-async function createNewTest(test) {
+async function addNewTest(test) {
   try {
     const res = await Test.query().insert({
       testName: test.testName,
       difficultyLevel: test.difficultyLevel,
       email: test.email
     });
+
+    return {
+      success: true,
+      message: 'Test Added Successfully',
+      tests: getAllTests()
+    };
   } catch (error) {
     console.log(error);
   }
 }
 
+async function addNewUser(user) {
+  try {
+    const res = await User.query().insert({
+      email: user.email,
+      name:user.name,
+      collegeName:user.collegeName
+    });
+    return {
+      success: true,
+      message: 'User Added Successfully',
+      user: res
+    };
+  } catch (error) {
+    console.log(error);
+  }
+}
 async function problemReducer(prob) {
   return {
     id: prob.id,
@@ -63,7 +87,6 @@ async function problemReducer(prob) {
     email: prob.email
   };
 }
-
 async function testReducer(test) {
   const problem = await Problem.query().where(
     'id',
@@ -72,9 +95,6 @@ async function testReducer(test) {
       .select('p_id')
       .where('t_id', test.id)
   );
-  //console.log(problem);
-  // console.log(test.id);
-  //console.log(problem.map((prob) => {return problemReducer(prob);}));
   return {
     id: test.id,
     testName: test.testName,
@@ -93,10 +113,7 @@ async function getAllProblems() {
        console.log(problemReducer(problem));
     return problemReducer(problem);
   });
-  //console.log(res);
 }
-
-//getAllProblems();
 
 async function getProblemById(id) {
   const res = await Problem.query().findById(id);
@@ -110,9 +127,7 @@ async function getAllTests() {
     console.log(testReducer(test));
     return testReducer(test);
   });
-  //console.log(res);
 }
-//getAllTests();
 
 async function getTestByAuthor(email) {
   const res = await Test.query().where('email', email);
@@ -142,15 +157,6 @@ function getToken(id) {
   return { token: token };
 }
 
-function addNewUser(newUser) {
-  console.log(newUser);
-  return {
-    success: true,
-    message: 'Successfully added',
-    Details: newUser
-  };
-}
-
 function getTestByToken(token) {
   console.log(token);
   const decode = jwt.decode(token);
@@ -176,16 +182,16 @@ function sendMail(mailDetails) {
 }
 
 module.exports = {
-  getTestById,
-  sendMail,
-  getTestByToken,
-  addNewUser,
-  getToken,
-  getAllProblems,
   getProblemById,
-  getAllTests,
-  getTestByAuthor,
+  getAllProblems,
   getProblemsByAuthor,
   addNewProblem,
-  createNewTest
+  getTestById,
+  getAllTests,
+  getTestByAuthor,
+  addNewTest,
+  getTestByToken,
+  getToken,
+  sendMail,
+  addNewUser
 };

@@ -45,6 +45,85 @@ const sendMail = gql`
   }
 `;
 
+const addProblem = gql`
+  mutation addNewProblem(
+      $problemName:String,
+      $description: String,
+      $problemTests:JSON,
+      $difficultyLevel: String,
+      $email: String
+  )
+  {
+    addProblem(
+    data:{
+      problemName: $problemName,
+      description: $description,
+      problemTests:$problemTests,
+      difficultyLevel: $difficultyLevel,
+      email: $email
+    }
+  )
+  {
+    success
+    message
+    problems
+    {
+      problemName
+    }
+  }
+  }
+`;
+const addTest = gql`
+  mutation addNewTest(
+      $testName:String,
+      $difficultyLevel: String,
+      $email: String
+  )
+  {
+    
+  }addTest(
+    data:{
+      testName: $testName,
+      difficultyLevel: $difficultyLevel,
+      email: $email
+    }
+  )
+  {
+    success
+    message
+    tests
+    {
+      testName
+    }
+  }
+`;
+const addUser = gql`
+  mutation addNewUser(
+      $name:String,
+      $email: String,
+      $collegeName:String
+  )
+  {
+  addUser(
+    data:{
+      name: $name
+      email:$email
+      collegeName: $collegeName
+    }
+  )
+  {
+    success
+    message
+    user
+    {
+      name
+      id
+      collegeName
+    }
+  }
+  }
+`;
+
 const getProblemById = gql`
   query getProblemById($id: ID!) {
     problemById(id: $id) {
@@ -79,6 +158,9 @@ export const apolloClient = {
   getProblems,
   getProblemById,
   allTests,
+  addProblem,
+  addTest,
+  addUser,
   getToken,
   testByToken
 };
