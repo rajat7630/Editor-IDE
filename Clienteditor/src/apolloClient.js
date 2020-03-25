@@ -80,8 +80,7 @@ const addTest = gql`
       $email: String
   )
   {
-    
-  }addTest(
+   addTest(
     data:{
       testName: $testName,
       difficultyLevel: $difficultyLevel,
@@ -95,6 +94,7 @@ const addTest = gql`
     {
       testName
     }
+  }
   }
 `;
 const addUser = gql`
