@@ -9,6 +9,8 @@
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
   import Tabs from "./Tabs.svelte";
+  import GiveTest from "./routes/give_test.svelte";
+  import SendTest from "./routes/send_test.svelte";
   import { dataStore, currentTab } from "./store.js";
   import { apolloClient } from "./apolloClient.js";
   import { getClient, query } from "svelte-apollo";
@@ -19,7 +21,7 @@
   import gql from "graphql-tag";
   const cache = new InMemoryCache();
   const link = new HttpLink({
-    uri: "http://localhost:3000/graphql/"
+    uri: "http://localhost:3000/graphql"
   });
   const client = new ApolloClient({
     link,
@@ -27,15 +29,7 @@
   });
 
   setClient(client);
-  const problems = query(client, { query: apolloClient.getProblems });
-  onMount(() => {
-    dataStore.updateData();
-  });
-
-  var isAdmin = () => {
-   
-  }
-  console.log(isAdmin());
+  export let currentRoute;
 </script>
 
 <svelte:window
@@ -69,4 +63,4 @@
       dataStore.deleteTab(id);
     }
   }} />
-<Router {routes} />
+<Router {routes} {currentRoute}/>

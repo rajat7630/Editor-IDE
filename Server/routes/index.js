@@ -56,7 +56,7 @@ router.get(
           httpOnly:false
         });
 
-		res.redirect("http://localhost:5000/admin?token=" + token);
+		res.redirect("http://localhost:5000/admin");
 	}
 );
 
