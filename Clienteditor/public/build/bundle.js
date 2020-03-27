@@ -31713,6 +31713,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       id
       problemName
       description
+      problemTests
+    }
+  }
+`;
+
+    const problemsByAuthor = src$1`
+  query problemsByAuthor($email:String) {
+    problemsByAuthor(email:$email) {
+      id
+      problemName
+      problemTests
+      description
+      difficultyLevel
+      email
     }
   }
 `;
@@ -31734,11 +31748,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
+    const testsByAuthor = src$1`
+  query testsByAuthor($email:String) {
+    testsByAuthor(email:$email) {
+      id
+      testName
+      difficultyLevel
+    }
+  }
+`;
+
     const testByToken = src$1`
   query getTest {
     testByToken {
       id
       testName
+      difficultyLevel
     }
   }
 `;
@@ -31753,81 +31778,159 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const addProblem = src$1`
-  mutation addNewProblem(
-      $problemName:String,
-      $description: String,
-      $problemTests:JSON,
-      $difficultyLevel: String,
-      $email: String
-  )
-  {
+  mutation addNewProblem($problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String,$email: String){
     addProblem(
     data:{
       problemName: $problemName,
       description: $description,
       problemTests:$problemTests,
       difficultyLevel: $difficultyLevel,
-      email: $email
-    }
-  )
-  {
+      email: $email})
+    {
     success
     message
     problems
     {
-      problemName
-    }
-  }
-  }
-`;
-    const addTest = src$1`
-  mutation addNewTest(
-      $testName:String,
-      $difficultyLevel: String,
-      $email: String
-  )
-  {
-   addTest(
-    data:{
-      testName: $testName,
-      difficultyLevel: $difficultyLevel,
-      email: $email
-    }
-  )
-  {
-    success
-    message
-    tests
-    {
-      testName
-    }
-  }
-  }
-`;
-    const addUser = src$1`
-  mutation addNewUser(
-      $name:String,
-      $email: String,
-      $collegeName:String
-  )
-  {
-  addUser(
-    data:{
-      name: $name
-      email:$email
-      collegeName: $collegeName
-    }
-  )
-  {
-    success
-    message
-    user
-    {
-      name
       id
-      collegeName
+      problemName
+      problemTests
+      description
+      difficultyLevel
+      email
     }
   }
+}
+`;
+
+    const deleteProblem = src$1`
+  mutation deleteProblem($id:Id!){
+    deleteProblem(id:$id){
+      id
+      problemName
+      problemTests
+      description
+      difficultyLevel
+      email
+  }
+}`;
+
+    const updateProblem = src$1`
+  mutation updateProblem($id:ID!,$problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String){
+    updateProblem(id:$id,
+    data:{
+      problemName: $problemName,
+      description: $description,
+      problemTests:$problemTests,
+      difficultyLevel: $difficultyLevel})
+    {
+    success
+    message
+    problems
+    {
+      id
+      problemName
+      problemTests
+      description
+      difficultyLevel
+      email
+    }
+  }
+}
+`;
+
+    const addTest = src$1`
+  mutation addNewTest($testName:String,$difficultyLevel: String,$email: String){
+    addTest(data:{testName: $testName,difficultyLevel: $difficultyLevel,email: $email}){
+      success
+      message
+      tests {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          difficultyLevel
+          email
+        }
+     }
+  }
+}`;
+
+    const deleteTest = src$1`
+  mutation deleteTest($id:Id!) {
+    deleteTest(id:$id){
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
+  }
+}`;
+    const updateTest = src$1`
+mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
+  updateTest(id:$id,
+    data:{testName: $testName,difficultyLevel: $difficultyLevel}){
+    success
+    message
+    tests {
+      id
+      testName
+      difficultyLevel
+      email
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
+   }
+}
+}`;
+
+    const addUser = src$1`
+  mutation addNewUser($name:String,$email: String,$collegeName:String){
+    addUser(data:{name: $name, email:$email, collegeName: $collegeName }) {
+      success
+      message
+      user {
+        name
+        id
+        collegeName
+    }
+  }
+}
+`;
+    const addTestProblem = src$1`
+  mutation addTestProblem($t_id:Int, $p_id:Int)
+  {
+   addTestProblem(data:{t_id: $t_id p_id: $p_id }) {
+    success
+    message
+    test {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
+    }
+   }
   }
 `;
 
@@ -31839,6 +31942,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       createdAt
       difficultyLevel
       problemName
+      problemTests
     }
   }
 `;
@@ -31852,6 +31956,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       problems {
         id
         problemName
+        problemTests
+        description
         difficultyLevel
         email
       }
@@ -31864,9 +31970,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       getTestById,
       getProblems,
       getProblemById,
+      testsByAuthor,
+      deleteProblem,
+      updateProblem,
+      updateTest,
       allTests,
+      problemsByAuthor,
       addProblem,
       addTest,
+      addTestProblem,
+      deleteTest,
       addUser,
       getToken,
       testByToken
@@ -32349,7 +32462,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             // extra care to replace process.env.NODE_ENV in their production builds,
             // or define an appropriate global.process polyfill.
         }
-    //# sourceMappingURL=invariant.esm.js.map
 
     var fastJsonStableStringify = function (data, opts) {
         if (!opts) opts = {};
@@ -32534,7 +32646,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         bSet.add(b);
         return false;
     }
-    //# sourceMappingURL=equality.esm.js.map
 
     function isStringValue(value) {
         return value.kind === 'StringValue';
@@ -33318,7 +33429,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return value;
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     var OBSERVABLE;
     function isObservable(value) {
@@ -33374,7 +33484,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return function () { return subscription.unsubscribe(); };
         });
     }
-    //# sourceMappingURL=svelte-observable.es.js.map
 
     var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
     function getClient() {
@@ -33444,7 +33553,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function mutate(client, options) {
         return client.mutate(options);
     }
-    //# sourceMappingURL=svelte-apollo.es.js.map
 
     /* src/components/testmodal_component.svelte generated by Svelte v3.18.1 */
 
@@ -37617,7 +37725,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     var zenObservable = Observable_1.Observable;
 
     var Observable = zenObservable;
-    //# sourceMappingURL=bundle.esm.js.map
 
     function validateOperation(operation) {
         var OPERATION_FIELDS = [
@@ -37772,7 +37879,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function execute(link, operation) {
         return (link.request(createOperation(operation.context, transformOperation(validateOperation(operation)))) || Observable.of());
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     function symbolObservablePonyfill(root) {
     	var result;
@@ -39907,7 +40013,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloClient;
     }());
-    //# sourceMappingURL=bundle.esm.js.map
 
     /**
      * Converts an AST into a string, using one set of reasonable
@@ -40326,7 +40431,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return fallbackURI || '/graphql';
         }
     };
-    //# sourceMappingURL=bundle.esm.js.map
 
     var createHttpLink = function (linkOptions) {
         if (linkOptions === void 0) { linkOptions = {}; }
@@ -40466,7 +40570,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return HttpLink;
     }(ApolloLink));
-    //# sourceMappingURL=bundle.esm.js.map
 
     function queryFromPojo(obj) {
         var op = {
@@ -40634,7 +40737,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloCache;
     }());
-    //# sourceMappingURL=bundle.esm.js.map
 
     // This currentContext variable will only be used if the makeSlotClass
     // function is called, which happens only if this is the first copy of the
@@ -40774,7 +40876,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }();
 
     var bind = Slot.bind, noContext = Slot.noContext;
-    //# sourceMappingURL=context.esm.js.map
 
     function defaultDispose() { }
     var Cache = /** @class */ (function () {
@@ -41249,7 +41350,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return optimistic;
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     var haveWarned = false;
     function shouldWarn() {
@@ -42178,7 +42278,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return InMemoryCache;
     }(ApolloCache));
-    //# sourceMappingURL=bundle.esm.js.map
 
     /* src/App.svelte generated by Svelte v3.18.1 */
 

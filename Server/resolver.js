@@ -21,8 +21,8 @@ module.exports = {
       return store.getTestById(id);
     },
 
-    testByAuthor: (_, {email}) => {
-      return store.getTestByAuthor(email);
+    testsByAuthor: (_, {email}) => {
+      return store.getTestsByAuthor(email);
     },
     problemsByAuthor:(_, {email})=>{
       return store.getProblemsByAuthor(email);
@@ -33,17 +33,36 @@ module.exports = {
       console.log(data);
       return store.addNewProblem(data);
     },
-
+    deleteProblem:(parent,{id},ctx,info) => {
+       console.log(id);
+       return store.deleteProblem(id);
+    },
+    updateProblem:(parent,{id,data},ctx,info) => {
+        console.log(id,data);
+        return store.updateProblem(id,data);
+    },
     addTest: (parent,{data},ctx,info) => {
       console.log(data);
       return store.addNewTest(data);
     },
-
+    deleteTest:(parent,{id},ctx,info) => {
+        console.log(id);
+        return store.deleteTest(id);
+    },
+    updateTest:(parent,{id,data},ctx,info) => {
+        console.log(id,data);
+        return store.updateTest(id,data);
+    },
     addUser:(parent,{data},ctx,info)=>{
       console.log(data);
       return store.addNewUser(data);
     },
 
+    addTestProblem:(parent,{data},ctx,info) => {
+        console.log(data);
+        return store.addTestProblem(data);
+    },
+ 
     sendMail:(_, mailDetails)=>{
       return store.sendMail(mailDetails);
     }

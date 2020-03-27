@@ -42,6 +42,38 @@ async function addNewProblem(problem) {
   }
 }
 
+async function deleteProblem(id) {
+  try {
+    await TestProblem.query()
+                     .delete()
+                     .where('p_id',id);
+
+    await Problem.query().deleteById(id);
+
+    return getAllProblems();
+  }catch(error) {
+    throw new Error(error);
+  }
+}
+
+async function updateProblem(id,problem) {
+  try{
+    const updatedProblem = await Problem.query()
+                            .patchAndFetchById(id,{
+                            problemName:problem.problemName,
+                            description:problem.description,
+                            problemTests:Problem.problemTests,
+                            difficultyLevel:problem.difficultyLevel
+                          });
+    return {
+      success: true,
+      message: 'Problem updated Successfully',
+      problem: problemReducer(updatedProblem)
+    };
+  }catch(error){
+    throw new Error(error);
+  }
+}
 async function addNewTest(test) {
   try {
     const res = await Test.query().insert({
@@ -59,7 +91,34 @@ async function addNewTest(test) {
     console.log(error);
   }
 }
+async function deleteTest(id) {
+  try {
+    await TestProblem.query()
+    .delete()
+    .where('t_id',id);
 
+    await Test.query().deleteById(id);                 
+     return getAllTests();
+  }catch(error) {
+    throw new Error(error);
+  }
+}
+async function updateTest(id,test) {
+  try{
+    const updatedTest = await Test.query()
+                            .patchAndFetchById(id,{
+                            testName:test.testName,
+                            difficultyLevel:test.difficultyLevel
+                          });
+    return {
+      success: true,
+      message: 'Test updated Successfully',
+      test: testReducer(updatedTest)
+    };
+  }catch(error){
+    throw new Error(error);
+  }
+}
 async function addNewUser(user) {
   try {
     const res = await User.query().insert({
@@ -76,12 +135,30 @@ async function addNewUser(user) {
     console.log(error);
   }
 }
+
+async function addTestProblem(testProblem) {
+  try {
+    const res = await TestProblem.query().insert({
+       t_id: testProblem.t_id,
+       p_id: testProblem.p_id
+    });
+    const test = getTestById(testProblem.t_id);
+    return {
+      success: true,
+      message:'Problem added successfully',
+      test: test
+    };
+  } catch(error) {
+     throw new Error(error);
+  }
+
+}
 async function problemReducer(prob) {
   return {
     id: prob.id,
     problemName: prob.problemName,
     description: prob.description,
-    testCases: prob.problemTests,
+    problemTests: prob.problemTests,
     difficultyLevel: prob.difficultyLevel,
     createdAt: prob.createdAt,
     email: prob.email
@@ -129,9 +206,9 @@ async function getAllTests() {
   });
 }
 
-async function getTestByAuthor(email) {
+async function getTestsByAuthor(email) {
   const res = await Test.query().where('email', email);
-  return res.rows.map((test) => {
+  return res.map((test) => {
     return testReducer(test);
   });
 }
@@ -144,8 +221,8 @@ async function getTestById(id){
 
 async function getProblemsByAuthor(email) {
   const res = await Problem.query().where('email', email);
-  return res.rows.map((test) => {
-    return problemReducer(test);
+  return res.map((problem) => {
+    return problemReducer(problem);
   });
 }
 
@@ -186,10 +263,15 @@ module.exports = {
   getAllProblems,
   getProblemsByAuthor,
   addNewProblem,
+  deleteProblem,
+  updateProblem,
   getTestById,
   getAllTests,
-  getTestByAuthor,
+  getTestsByAuthor,
   addNewTest,
+  deleteTest,
+  updateTest,
+  addTestProblem,
   getTestByToken,
   getToken,
   sendMail,
