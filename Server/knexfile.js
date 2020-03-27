@@ -1,17 +1,16 @@
 // Update with your config settings.
 
 module.exports = {
-
   development: {
     client: 'postgresql',
     connection: {
-      user : 'postgres',
-      password : 'password',
-      host:'localhost',
-      port: '5600',
-      database:'try_out_db'
+      user: 'postgres',
+      password: 'postgres',
+      host: 'localhost',
+      port: '5432',
+      database: 'try_out'
     }
-  },
+  }
 
   // test: {
   //   client: 'pgs',
@@ -45,5 +44,4 @@ module.exports = {
   //     tableName: 'knex_migrations'
   //   }
   // }
-
 };
