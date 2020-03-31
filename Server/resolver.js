@@ -29,17 +29,19 @@ module.exports = {
     }
   },
   Mutation: {
-    addProblem: (_, newProblem ) => {
-      console.log(newProblem);
-      return store.addNewProblem(newProblem);
+    addProblem: (parent,{data},ctx,info) => {
+      console.log(data);
+      return store.addNewProblem(data);
     },
 
-    addTest: (_, newTest) => {
-      return store.createNewTest(newTest);
+    addTest: (parent,{data},ctx,info) => {
+      console.log(data);
+      return store.addNewTest(data);
     },
 
-    addUser:(_,newUser)=>{
-      return store.addNewUser(newUser);
+    addUser:(parent,{data},ctx,info)=>{
+      console.log(data);
+      return store.addNewUser(data);
     },
 
     sendMail:(_, mailDetails)=>{

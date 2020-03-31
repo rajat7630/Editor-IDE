@@ -13,10 +13,11 @@
     "apollo": "^2.22.1",
     "apollo-datasource-rest": "^0.7.0",
     "apollo-server": "^2.10.0",
-    "apollo-server-express": "^2.11.0",
+    "aws-sdk": "^2.644.0",
     "body-parser": "^1.19.0",
     "concurrently": "^5.1.0",
     "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "graphql-type-json": "^0.3.1",
     "jsonwebtoken": "^8.5.1",
@@ -36,6 +37,8 @@
     "typescript": "^3.8.3"
   },
   "devDependencies": {
+    "@commitlint/cli": "^8.3.5",
+    "@commitlint/config-conventional": "^8.3.4",
     "eslint": "^6.8.0",
     "eslint-config-airbnb-base": "^14.1.0",
     "eslint-plugin-import": "^2.20.1"

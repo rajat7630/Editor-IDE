@@ -1,6 +1,6 @@
 const Model = require('./config.js');
 
-const { BaseModel } = require('./BaseModel');
+const BaseModel= require('./BaseModel');
 
 class User extends BaseModel {
     static get tableName () {
