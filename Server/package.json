@@ -7,18 +7,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon app.js"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged",
-      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
-    }
-  },
-  "lint-staged": {
-    "*.js": [
-      ".Server/node_modules/.bin/eslint --fix",
-      "git add"
-    ]
-  },
   "author": "",
   "license": "ISC",
   "dependencies": {
