@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "ace-builds": "^1.4.8",
+    "apollo-boost": "^0.4.7",
     "apollo-cache-inmemory": "^1.6.5",
     "apollo-client": "^2.6.8",
     "apollo-link-http": "^1.5.16",
@@ -31,6 +32,7 @@
     "svelte-apollo": "^0.3.0",
     "svelte-router-spa": "^5.4.3",
     "svelte-routing": "^1.4.0",
+    "svelte-simple-modal": "^0.3.0",
     "tailwindcss": "^1.2.0"
   }
 }

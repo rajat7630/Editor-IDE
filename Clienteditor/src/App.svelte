@@ -1,10 +1,9 @@
 <script>
- // import { Router, Link, Route } from "svelte-routing";
+  // import { Router, Link, Route } from "svelte-routing";
 
-
-//Routes
-  import { Router } from 'svelte-router-spa'
-  import { routes } from './routes'
+  //Routes
+  import { Router } from "svelte-router-spa";
+  import { routes } from "./routes";
 
   import { onMount } from "svelte";
   import EditorArea from "./EditorArea.svelte";
@@ -14,18 +13,11 @@
   import { dataStore, currentTab } from "./store.js";
   import { apolloClient } from "./apolloClient.js";
   import { getClient, query } from "svelte-apollo";
-  import { ApolloClient } from "apollo-client";
-  import { HttpLink } from "apollo-link-http";
-  import { InMemoryCache } from "apollo-cache-inmemory";
+  import ApolloClient from "apollo-boost";
   import { setClient } from "svelte-apollo";
   import gql from "graphql-tag";
-  const cache = new InMemoryCache();
-  const link = new HttpLink({
-    uri: "http://localhost:3000/graphql"
-  });
   const client = new ApolloClient({
-    link,
-    cache
+    uri: "http://localhost:3000/graphql"
   });
 
   setClient(client);
@@ -63,4 +55,4 @@
       dataStore.deleteTab(id);
     }
   }} />
-<Router {routes} {currentRoute}/>
+<Router {routes} {currentRoute} />

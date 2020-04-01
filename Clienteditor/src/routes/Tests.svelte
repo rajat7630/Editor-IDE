@@ -1,8 +1,6 @@
 <script>
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query } from "svelte-apollo";
-  import TestModal from "../components/testmodal_component.svelte";
-  import ProblemModal from "../components/problemmodal_component.svelte";
   import Navbar from "../components/navbar.svelte";
   export let currentRoute;
   console.log(currentRoute);
