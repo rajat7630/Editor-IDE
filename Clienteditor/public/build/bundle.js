@@ -34452,6 +34452,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     const file$9 = "src/Modals/ProblemFields.svelte";
 
     function create_fragment$b(ctx) {
+    	let div17;
     	let div0;
     	let p;
     	let t1;
@@ -34482,29 +34483,36 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	let label3;
     	let t12;
     	let div11;
-    	let label4;
-    	let input1;
+    	let textarea2;
     	let t13;
-    	let span0;
+    	let div15;
+    	let div13;
+    	let label4;
     	let t15;
+    	let div14;
     	let label5;
-    	let input2;
+    	let input1;
     	let t16;
-    	let span1;
+    	let span0;
     	let t18;
     	let label6;
-    	let input3;
+    	let input2;
     	let t19;
-    	let span2;
+    	let span1;
     	let t21;
-    	let div13;
+    	let label7;
+    	let input3;
+    	let t22;
+    	let span2;
+    	let t24;
+    	let div16;
     	let button0;
-    	let t23;
+    	let t26;
     	let button1;
-    	let dispose;
 
     	const block = {
     		c: function create() {
+    			div17 = element("div");
     			div0 = element("div");
     			p = element("p");
     			p.textContent = "Add New Problem";
@@ -34537,6 +34545,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			div12 = element("div");
     			div10 = element("div");
     			label3 = element("label");
+<<<<<<< HEAD
     			label3.textContent = "Difficulty Type";
     			t12 = space();
     			div11 = element("div");
@@ -34562,120 +34571,141 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			button0 = element("button");
     			button0.textContent = "Save";
     			t23 = space();
+    			span2 = element("span");
+    			span2.textContent = "Hard";
+    			t24 = space();
+    			div16 = element("div");
+    			button0 = element("button");
+    			button0.textContent = "Action";
+    			t26 = space();
     			button1 = element("button");
     			button1.textContent = "Close";
     			attr_dev(p, "class", "text-2xl font-bold");
-    			add_location(p, file$9, 32, 2, 756);
+    			add_location(p, file$9, 9, 4, 190);
     			attr_dev(div0, "class", "flex justify-between items-center pb-3");
-    			add_location(div0, file$9, 31, 0, 701);
+    			add_location(div0, file$9, 8, 2, 133);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$9, 37, 6, 922);
+    			add_location(label0, file$9, 15, 8, 367);
     			attr_dev(div1, "class", "md:w-1/3");
-    			add_location(div1, file$9, 36, 4, 893);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n        w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n        focus:bg-white focus:border-purple-500");
+    			add_location(div1, file$9, 14, 6, 336);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
-    			attr_dev(input0, "placeholder", "Problem Name");
-    			add_location(input0, file$9, 44, 6, 1119);
+    			input0.value = "Problem Name";
+    			add_location(input0, file$9, 22, 8, 578);
     			attr_dev(div2, "class", "md:w-2/3");
-    			add_location(div2, file$9, 43, 4, 1090);
+    			add_location(div2, file$9, 21, 6, 547);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$9, 35, 2, 846);
+    			add_location(div3, file$9, 13, 4, 287);
     			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-username");
-    			add_location(label1, file$9, 56, 6, 1549);
+    			add_location(label1, file$9, 33, 8, 983);
     			attr_dev(div4, "class", "md:w-1/3");
-    			add_location(div4, file$9, 55, 4, 1520);
-    			attr_dev(textarea0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n        w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n        focus:bg-white focus:border-purple-500");
+    			add_location(div4, file$9, 32, 6, 952);
+    			attr_dev(textarea0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(textarea0, "id", "inline-username");
     			attr_dev(textarea0, "type", "text-area");
     			attr_dev(textarea0, "placeholder", "Problem Statement");
-    			add_location(textarea0, file$9, 63, 6, 1752);
+    			add_location(textarea0, file$9, 40, 8, 1200);
     			attr_dev(div5, "class", "md:w-2/3");
-    			add_location(div5, file$9, 62, 4, 1723);
+    			add_location(div5, file$9, 39, 6, 1169);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$9, 54, 2, 1473);
+    			add_location(div6, file$9, 31, 4, 903);
     			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label2, "for", "inline-username");
-    			add_location(label2, file$9, 75, 6, 2194);
+    			add_location(label2, file$9, 51, 8, 1623);
     			attr_dev(div7, "class", "md:w-1/3");
-    			add_location(div7, file$9, 74, 4, 2165);
-    			attr_dev(textarea1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n        w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n        focus:bg-white focus:border-purple-500");
+    			add_location(div7, file$9, 50, 6, 1592);
+    			attr_dev(textarea1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(textarea1, "id", "inline-username");
     			attr_dev(textarea1, "type", "text-area");
     			attr_dev(textarea1, "placeholder", "eg : [1,3]");
-    			add_location(textarea1, file$9, 82, 6, 2388);
+    			add_location(textarea1, file$9, 58, 8, 1831);
     			attr_dev(div8, "class", "md:w-2/3");
-    			add_location(div8, file$9, 81, 4, 2359);
+    			add_location(div8, file$9, 57, 6, 1800);
     			attr_dev(div9, "class", "md:flex md:items-center mb-6");
-    			add_location(div9, file$9, 73, 2, 2118);
+    			add_location(div9, file$9, 49, 4, 1543);
     			attr_dev(label3, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label3, "for", "inline-username");
-    			add_location(label3, file$9, 94, 6, 2824);
+    			add_location(label3, file$9, 69, 8, 2247);
     			attr_dev(div10, "class", "md:w-1/3");
-    			add_location(div10, file$9, 93, 4, 2795);
+    			add_location(div10, file$9, 68, 6, 2216);
+    			attr_dev(textarea2, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
+    			attr_dev(textarea2, "id", "inline-username");
+    			attr_dev(textarea2, "type", "text-area");
+    			attr_dev(textarea2, "placeholder", "[4]");
+    			add_location(textarea2, file$9, 76, 8, 2451);
+    			attr_dev(div11, "class", "md:w-2/3");
+    			add_location(div11, file$9, 75, 6, 2420);
+    			attr_dev(div12, "class", "md:flex md:items-center mb-6");
+    			add_location(div12, file$9, 67, 4, 2167);
+    			attr_dev(label4, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
+    			attr_dev(label4, "for", "inline-username");
+    			add_location(label4, file$9, 87, 8, 2860);
+    			attr_dev(div13, "class", "md:w-1/3");
+    			add_location(div13, file$9, 86, 6, 2829);
     			attr_dev(input1, "type", "radio");
     			attr_dev(input1, "class", "form-radio");
     			attr_dev(input1, "name", "difficultyType");
-    			input1.__value = "easy";
-    			input1.value = input1.__value;
-    			/*$$binding_groups*/ ctx[9][0].push(input1);
-    			add_location(input1, file$9, 102, 8, 3072);
+    			input1.value = "easy";
+    			add_location(input1, file$9, 95, 10, 3124);
     			attr_dev(span0, "class", "ml-2 text-gray-500");
-    			add_location(span0, file$9, 108, 8, 3244);
-    			attr_dev(label4, "class", "inline-flex items-center");
-    			add_location(label4, file$9, 101, 6, 3023);
+    			add_location(span0, file$9, 100, 10, 3259);
+    			attr_dev(label5, "class", "inline-flex items-center");
+    			add_location(label5, file$9, 94, 8, 3073);
     			attr_dev(input2, "type", "radio");
     			attr_dev(input2, "class", "form-radio");
     			attr_dev(input2, "name", "difficultyType");
-    			input2.__value = "medium";
-    			input2.value = input2.__value;
-    			/*$$binding_groups*/ ctx[9][0].push(input2);
-    			add_location(input2, file$9, 111, 8, 3364);
+    			input2.value = "medium";
+    			add_location(input2, file$9, 103, 10, 3385);
     			attr_dev(span1, "class", "ml-2 text-gray-500");
-    			add_location(span1, file$9, 117, 8, 3538);
-    			attr_dev(label5, "class", "inline-flex items-center ml-6");
-    			add_location(label5, file$9, 110, 6, 3310);
+    			add_location(span1, file$9, 108, 10, 3522);
+    			attr_dev(label6, "class", "inline-flex items-center ml-6");
+    			add_location(label6, file$9, 102, 8, 3329);
     			attr_dev(input3, "type", "radio");
     			attr_dev(input3, "class", "form-radio");
     			attr_dev(input3, "name", "difficultyType");
-    			input3.__value = "hard";
-    			input3.value = input3.__value;
-    			/*$$binding_groups*/ ctx[9][0].push(input3);
-    			add_location(input3, file$9, 120, 8, 3660);
+    			input3.value = "hard";
+    			add_location(input3, file$9, 111, 10, 3650);
     			attr_dev(span2, "class", "ml-2 text-gray-500");
-    			add_location(span2, file$9, 126, 8, 3832);
-    			attr_dev(label6, "class", "inline-flex items-center ml-6");
-    			add_location(label6, file$9, 119, 6, 3606);
-    			attr_dev(div11, "class", "md:w-2/3");
-    			add_location(div11, file$9, 100, 4, 2994);
-    			attr_dev(div12, "class", "md:flex md:items-center mb-6");
-    			add_location(div12, file$9, 92, 2, 2748);
+    			add_location(span2, file$9, 116, 10, 3785);
+    			attr_dev(label7, "class", "inline-flex items-center ml-6");
+    			add_location(label7, file$9, 110, 8, 3594);
+    			attr_dev(div14, "class", "md:w-2/3");
+    			add_location(div14, file$9, 93, 6, 3042);
+    			attr_dev(div15, "class", "md:flex md:items-center mb-6");
+    			add_location(div15, file$9, 85, 4, 2780);
+    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500\n        hover:bg-gray-100 hover:text-indigo-400 mr-2");
+    			add_location(button0, file$9, 121, 6, 3917);
+    			attr_dev(button1, "class", "modal-closet px-4 bg-indigo-500 p-3 rounded-lg text-white\n        hover:bg-indigo-400");
+    			add_location(button1, file$9, 126, 6, 4083);
+    			attr_dev(div16, "class", "flex justify-end pt-2");
+    			add_location(div16, file$9, 120, 4, 3875);
     			attr_dev(form, "class", "w-full max-w-md");
-    			add_location(form, file$9, 34, 0, 813);
-    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500 hover:bg-gray-100\n    hover:text-indigo-400 mr-2");
-    			add_location(button0, file$9, 132, 2, 3958);
-    			attr_dev(button1, "class", "modal-closet px-4 bg-indigo-500 p-3 rounded-lg text-white\n    hover:bg-indigo-400");
-    			add_location(button1, file$9, 138, 2, 4130);
-    			attr_dev(div13, "class", "flex justify-end pt-2");
-    			add_location(div13, file$9, 131, 0, 3920);
+    			add_location(form, file$9, 12, 2, 252);
+    			attr_dev(div17, "class", "modal-content py-4 text-left px-6");
+    			add_location(div17, file$9, 6, 0, 68);
+>>>>>>> 428163b63c5cfc424f9c678d71415fa9d325e2b0
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div0, anchor);
+    			insert_dev(target, div17, anchor);
+    			append_dev(div17, div0);
     			append_dev(div0, p);
-    			insert_dev(target, t1, anchor);
-    			insert_dev(target, form, anchor);
+    			append_dev(div17, t1);
+    			append_dev(div17, form);
     			append_dev(form, div3);
     			append_dev(div3, div1);
     			append_dev(div1, label0);
     			append_dev(div3, t3);
     			append_dev(div3, div2);
     			append_dev(div2, input0);
+<<<<<<< HEAD
     			set_input_value(input0, /*problem*/ ctx[0].problemName);
+>>>>>>> 428163b63c5cfc424f9c678d71415fa9d325e2b0
     			append_dev(form, t4);
     			append_dev(form, div6);
     			append_dev(div6, div4);
@@ -34683,22 +34713,13 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(div6, t6);
     			append_dev(div6, div5);
     			append_dev(div5, textarea0);
+<<<<<<< HEAD
     			set_input_value(textarea0, /*problem*/ ctx[0].description);
+=======
+>>>>>>> 428163b63c5cfc424f9c678d71415fa9d325e2b0
     			append_dev(form, t7);
     			append_dev(form, div9);
     			append_dev(div9, div7);
-    			append_dev(div7, label2);
-    			append_dev(div9, t9);
-    			append_dev(div9, div8);
-    			append_dev(div8, textarea1);
-    			set_input_value(textarea1, /*problem*/ ctx[0].problemTests);
-    			append_dev(form, t10);
-    			append_dev(form, div12);
-    			append_dev(div12, div10);
-    			append_dev(div10, label3);
-    			append_dev(div12, t12);
-    			append_dev(div12, div11);
-    			append_dev(div11, label4);
     			append_dev(label4, input1);
     			input1.checked = input1.__value === /*problem*/ ctx[0].difficultyLevel;
     			append_dev(label4, t13);
@@ -34712,63 +34733,24 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(div11, t18);
     			append_dev(div11, label6);
     			append_dev(label6, input3);
-    			input3.checked = input3.__value === /*problem*/ ctx[0].difficultyLevel;
-    			append_dev(label6, t19);
-    			append_dev(label6, span2);
-    			insert_dev(target, t21, anchor);
-    			insert_dev(target, div13, anchor);
-    			append_dev(div13, button0);
-    			append_dev(div13, t23);
-    			append_dev(div13, button1);
-
-    			dispose = [
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
-    				listen_dev(textarea0, "input", /*textarea0_input_handler*/ ctx[6]),
-    				listen_dev(textarea1, "input", /*textarea1_input_handler*/ ctx[7]),
-    				listen_dev(input1, "change", /*input1_change_handler*/ ctx[8]),
-    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[10]),
-    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[11]),
-    				listen_dev(button0, "click", /*clickHandler*/ ctx[2], false, false, false),
-    				listen_dev(button1, "click", /*click_handler*/ ctx[12], false, false, false)
-    			];
+    			append_dev(label6, span1);
+    			append_dev(div14, t21);
+    			append_dev(div14, label7);
+    			append_dev(label7, input3);
+    			append_dev(label7, t22);
+    			append_dev(label7, span2);
+    			append_dev(form, t24);
+    			append_dev(form, div16);
+    			append_dev(div16, button0);
+    			append_dev(div16, t26);
+    			append_dev(div16, button1);
+>>>>>>> 428163b63c5cfc424f9c678d71415fa9d325e2b0
     		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*problem*/ 1 && input0.value !== /*problem*/ ctx[0].problemName) {
-    				set_input_value(input0, /*problem*/ ctx[0].problemName);
-    			}
-
-    			if (dirty & /*problem*/ 1) {
-    				set_input_value(textarea0, /*problem*/ ctx[0].description);
-    			}
-
-    			if (dirty & /*problem*/ 1) {
-    				set_input_value(textarea1, /*problem*/ ctx[0].problemTests);
-    			}
-
-    			if (dirty & /*problem*/ 1) {
-    				input1.checked = input1.__value === /*problem*/ ctx[0].difficultyLevel;
-    			}
-
-    			if (dirty & /*problem*/ 1) {
-    				input2.checked = input2.__value === /*problem*/ ctx[0].difficultyLevel;
-    			}
-
-    			if (dirty & /*problem*/ 1) {
-    				input3.checked = input3.__value === /*problem*/ ctx[0].difficultyLevel;
-    			}
-    		},
+    		p: noop,
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div0);
-    			if (detaching) detach_dev(t1);
-    			if (detaching) detach_dev(form);
-    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input1), 1);
-    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input2), 1);
-    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input3), 1);
-    			if (detaching) detach_dev(t21);
-    			if (detaching) detach_dev(div13);
-    			run_all(dispose);
+    			if (detaching) detach_dev(div17);
     		}
     	};
 
