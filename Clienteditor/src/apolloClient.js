@@ -58,11 +58,16 @@ const testsByAuthor = gql`
 `;
 
 const testByToken = gql`
-  query getTest {
-    testByToken {
+  query getTest($token:String) {
+    testByToken (token:$token){
       id
-      testName
-      difficultyLevel
+      problems{
+        id
+        problemName
+        description
+        
+      }
+      
     }
   }
 `;

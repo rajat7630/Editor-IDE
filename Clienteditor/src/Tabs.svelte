@@ -6,6 +6,7 @@
   .tabs {
     display: flex;
     border-left: solid 46px #25282c;
+    padding: 0;
   }
   .tab {
     padding: 1rem;
@@ -14,6 +15,7 @@
     font-size: 1.2rem;
     text-align: center;
     font-weight: 200%;
+    list-style: none;
     color: gray;
   }
   .active {
@@ -73,7 +75,7 @@
         on:click={() => dataStore.activate(tab.id)}>
         Problem {tab.id}
       </li>
-      <button
+      <!-- <button
         class:closeButtonActive={tab.active}
         class="closeButton"
         on:click={() => {
@@ -93,8 +95,8 @@
           dataStore.deleteTab(tab.id);
         }}>
         x
-      </button>
+      </button> -->
     </div>
   {/each}
-  <button class="addButton" on:click={()=>{dataStore.add()}}>+</button>
+  <!-- <button class="addButton" on:click={()=>{dataStore.add()}}>+</button> -->
 </ul>

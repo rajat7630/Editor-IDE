@@ -32,17 +32,12 @@ const routes = [
     component: Problems,
   },
   {
-    name: '/home',
-    component: Home,
-    onlyIf: { guard: userIsAdmin, redirect: '/' }
-  },
-  {
     name:'/sendtest/:id',
     component:SendTest,
   },
   {
     name:'/givetest/:token',
-    component:GiveTest,
+    component:Home,
   }
 ];
 

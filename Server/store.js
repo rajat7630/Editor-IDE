@@ -217,6 +217,7 @@ function getTestByToken(token) {
   console.log(token);
   const decode = jwt.decode(token);
   console.log(decode);
+  return getTestById(decode.testId)
 }
 
 function sendMail(mailDetails) {

@@ -6,6 +6,7 @@
   import TestModal from "../Modals/testModal.svelte";
   import Navbar from "../components/navbar.svelte";
   const client = getClient();
+
   const Test = query(client, { query: apolloClient.allTests });
   const Problem = query(client, { query: apolloClient.getProblems });
   const handleProblemAdd = () => {
