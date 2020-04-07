@@ -20,7 +20,7 @@
     } catch (err) {
       console.log(err);
     }
-    cookieHandler.setCookie("loggedIn", "true", 10);
+    cookieHandler.setCookie("loggedIn", "true", 1);
     close();
   }
 </script>

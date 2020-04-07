@@ -17,7 +17,7 @@ const routes = [
   {
     name: '/',
     component: Login,
-    onlyIf: { guard: notAdmin,redirect: '/admin' }
+    // onlyIf: { guard: notAdmin,redirect: '/admin' }
   },
   {
     name: '/admin',

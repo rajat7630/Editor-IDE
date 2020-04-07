@@ -4,13 +4,12 @@
   //Routes
   import { Router } from "svelte-router-spa";
   import { routes } from "./routes";
-
   import { onMount } from "svelte";
-  import EditorArea from "./EditorArea.svelte";
-  import Tabs from "./Tabs.svelte";
-  import GiveTest from "./routes/give_test.svelte";
-  import SendTest from "./routes/send_test.svelte";
-  import { dataStore, currentTab } from "./store.js";
+  // import EditorArea from "./EditorArea.svelte";
+  // import Tabs from "./Tabs.svelte";
+  // import GiveTest from "./routes/give_test.svelte";
+  // import SendTest from "./routes/send_test.svelte";
+  // import { dataStore, currentTab } from "./store.js";
   import { apolloClient } from "./apolloClient.js";
   import { getClient, query } from "svelte-apollo";
   import ApolloClient from "apollo-boost";
@@ -24,7 +23,7 @@
   export let currentRoute;
 </script>
 
-<svelte:window
+<!-- <svelte:window
   on:keydown={evt => {
     if (evt.ctrlKey && evt.key === 's' && $currentTab.changeData) {
       console.log(evt);
@@ -54,5 +53,5 @@
       });
       dataStore.deleteTab(id);
     }
-  }} />
+  }} /> -->
 <Router {routes} {currentRoute} />

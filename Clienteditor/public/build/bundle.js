@@ -68,7 +68,10 @@ var app = (function () {
     function get_slot_changes(definition, $$scope, dirty, fn) {
         if (definition[2] && fn) {
             const lets = definition[2](fn(dirty));
-            if (typeof $$scope.dirty === 'object') {
+            if ($$scope.dirty === undefined) {
+                return lets;
+            }
+            if (typeof lets === 'object') {
                 const merged = [];
                 const len = Math.max($$scope.dirty.length, lets.length);
                 for (let i = 0; i < len; i += 1) {
@@ -181,9 +184,8 @@ var app = (function () {
         return e;
     }
 
-    let stylesheet;
+    const active_docs = new Set();
     let active = 0;
-    let current_rules = {};
     // https://github.com/darkskyapp/string-hash/blob/master/index.js
     function hash(str) {
         let hash = 5381;
@@ -201,12 +203,11 @@ var app = (function () {
         }
         const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
         const name = `__svelte_${hash(rule)}_${uid}`;
+        const doc = node.ownerDocument;
+        active_docs.add(doc);
+        const stylesheet = doc.__svelte_stylesheet || (doc.__svelte_stylesheet = doc.head.appendChild(element('style')).sheet);
+        const current_rules = doc.__svelte_rules || (doc.__svelte_rules = {});
         if (!current_rules[name]) {
-            if (!stylesheet) {
-                const style = element('style');
-                document.head.appendChild(style);
-                stylesheet = style.sheet;
-            }
             current_rules[name] = true;
             stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
         }
@@ -216,24 +217,31 @@ var app = (function () {
         return name;
     }
     function delete_rule(node, name) {
-        node.style.animation = (node.style.animation || '')
-            .split(', ')
-            .filter(name
+        const previous = (node.style.animation || '').split(', ');
+        const next = previous.filter(name
             ? anim => anim.indexOf(name) < 0 // remove specific animation
             : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
-        )
-            .join(', ');
-        if (name && !--active)
-            clear_rules();
+        );
+        const deleted = previous.length - next.length;
+        if (deleted) {
+            node.style.animation = next.join(', ');
+            active -= deleted;
+            if (!active)
+                clear_rules();
+        }
     }
     function clear_rules() {
         raf(() => {
             if (active)
                 return;
-            let i = stylesheet.cssRules.length;
-            while (i--)
-                stylesheet.deleteRule(i);
-            current_rules = {};
+            active_docs.forEach(doc => {
+                const stylesheet = doc.__svelte_stylesheet;
+                let i = stylesheet.cssRules.length;
+                while (i--)
+                    stylesheet.deleteRule(i);
+                doc.__svelte_rules = {};
+            });
+            active_docs.clear();
         });
     }
 
@@ -245,6 +253,9 @@ var app = (function () {
         if (!current_component)
             throw new Error(`Function called outside component initialization`);
         return current_component;
+    }
+    function beforeUpdate(fn) {
+        get_current_component().$$.before_update.push(fn);
     }
     function onMount(fn) {
         get_current_component().$$.on_mount.push(fn);
@@ -274,16 +285,21 @@ var app = (function () {
     function add_render_callback(fn) {
         render_callbacks.push(fn);
     }
+    let flushing = false;
     const seen_callbacks = new Set();
     function flush() {
+        if (flushing)
+            return;
+        flushing = true;
         do {
             // first, call beforeUpdate functions
             // and update components
-            while (dirty_components.length) {
-                const component = dirty_components.shift();
+            for (let i = 0; i < dirty_components.length; i += 1) {
+                const component = dirty_components[i];
                 set_current_component(component);
                 update(component.$$);
             }
+            dirty_components.length = 0;
             while (binding_callbacks.length)
                 binding_callbacks.pop()();
             // then, once components are updated, call
@@ -303,6 +319,7 @@ var app = (function () {
             flush_callbacks.pop()();
         }
         update_scheduled = false;
+        flushing = false;
         seen_callbacks.clear();
     }
     function update($$) {
@@ -659,8 +676,10 @@ var app = (function () {
         $$.fragment = create_fragment ? create_fragment($$.ctx) : false;
         if (options.target) {
             if (options.hydrate) {
+                const nodes = children(options.target);
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment && $$.fragment.l(children(options.target));
+                $$.fragment && $$.fragment.l(nodes);
+                nodes.forEach(detach);
             }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -693,7 +712,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.18.1' }, detail)));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.20.1' }, detail)));
     }
     function append_dev(target, node) {
         dispatch_dev("SvelteDOMInsert", { target, node });
@@ -738,6 +757,22 @@ var app = (function () {
         dispatch_dev("SvelteDOMSetData", { node: text, data });
         text.data = data;
     }
+    function validate_each_argument(arg) {
+        if (typeof arg !== 'string' && !(arg && typeof arg === 'object' && 'length' in arg)) {
+            let msg = '{#each} only iterates over array-like objects.';
+            if (typeof Symbol === 'function' && arg && Symbol.iterator in arg) {
+                msg += ' You can use a spread to convert this iterable into an array.';
+            }
+            throw new Error(msg);
+        }
+    }
+    function validate_slots(name, slot, keys) {
+        for (const slot_key of Object.keys(slot)) {
+            if (!~keys.indexOf(slot_key)) {
+                console.warn(`<${name}> received an unexpected slot "${slot_key}".`);
+            }
+        }
+    }
     class SvelteComponentDev extends SvelteComponent {
         constructor(options) {
             if (!options || (!options.target && !options.$$inline)) {
@@ -751,6 +786,8 @@ var app = (function () {
                 console.warn(`Component was already destroyed`); // eslint-disable-line no-console
             };
         }
+        $capture_state() { }
+        $inject_state() { }
     }
 
     const subscriber_queue = [];
@@ -1201,6 +1238,15 @@ var app = (function () {
     }
 
     /**
+     * Return the path name excluding query params
+     * @param name
+     **/
+    function pathWithoutQueryParams(currentRoute) {
+      const path = currentRoute.path.split('?');
+      return path[0]
+    }
+
+    /**
      * Return the path name including query params
      * @param name
      **/
@@ -1341,6 +1387,7 @@ var app = (function () {
       getPathNames,
       nameToPath,
       pathWithQueryParams,
+      pathWithoutQueryParams,
       removeExtraPaths,
       removeSlash,
       routeNameLocalised,
@@ -1392,6 +1439,7 @@ var app = (function () {
       function pushActiveRoute(newRoute) {
         if (typeof window !== 'undefined') {
           const pathAndSearch = pathWithQueryParams$1(newRoute);
+          //if (window.history && window.history.state && window.history.state.page !== pathAndSearch) {
           window.history.pushState({ page: pathAndSearch }, '', pathAndSearch);
           if (trackPageview) {
             gaTracking(pathAndSearch);
@@ -1568,24 +1616,25 @@ var app = (function () {
     const { RouterRedirect: RouterRedirect$1 } = redirect;
     const { RouterRoute: RouterRoute$1 } = route;
     const { RouterPath: RouterPath$1 } = path;
-    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithQueryParams: pathWithQueryParams$2 } = utils;
+    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithoutQueryParams: pathWithoutQueryParams$1 } = utils;
 
     const NotFoundPage = '/404.html';
 
-    function RouterFinder(routes, currentUrl, language, convert) {
+    function RouterFinder({ routes, currentUrl, routerOptions, convert }) {
+      const defaultLanguage = routerOptions.defaultLanguage;
+      const urlParser = UrlParser$4(currentUrl);
       let redirectTo = '';
       let routeNamedParams = {};
-      const urlParser = UrlParser$4(currentUrl);
 
       function findActiveRoute() {
-        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, language, convert);
+        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, routerOptions.lang, convert);
 
         if (!searchActiveRoute || !Object.keys(searchActiveRoute).length || anyEmptyNestedRoutes$1(searchActiveRoute)) {
           if (typeof window !== 'undefined') {
             searchActiveRoute = { name: '404', component: '', path: '404', redirectTo: NotFoundPage };
           }
         } else {
-          searchActiveRoute.path = pathWithQueryParams$2(searchActiveRoute);
+          searchActiveRoute.path = pathWithoutQueryParams$1(searchActiveRoute);
         }
 
         return searchActiveRoute
@@ -1663,7 +1712,7 @@ var app = (function () {
           path: routePath,
           routeNamedParams,
           namedPath,
-          language: routeLanguage
+          language: routeLanguage || defaultLanguage
         });
         routeNamedParams = routerRoute.namedParams();
 
@@ -1711,7 +1760,7 @@ var app = (function () {
           convert = true;
         }
 
-        return RouterFinder$1(routes, currentUrl, routerOptions.lang, convert).findActiveRoute()
+        return RouterFinder$1({ routes, currentUrl, routerOptions, convert }).findActiveRoute()
       }
 
       /**
@@ -1770,9 +1819,8 @@ var app = (function () {
       if (language) {
         routerOptions.langConvertTo = language;
       }
-      const activeRoute = SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute();
 
-      return activeRoute
+      return SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute()
     }
 
     /**
@@ -1805,7 +1853,7 @@ var app = (function () {
     var spa_router_3 = spa_router.navigateTo;
     var spa_router_4 = spa_router.routeIsActive;
 
-    /* node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.18.1 */
+    /* home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.20.1 */
 
     // (10:34) 
     function create_if_block_2(ctx) {
@@ -2149,19 +2197,24 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Route> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Route", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, params };
-    	};
+    	$$self.$capture_state = () => ({ currentRoute, params });
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [currentRoute, params];
     }
@@ -2201,7 +2254,7 @@ var app = (function () {
         'default': Route
     });
 
-    /* node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.18.1 */
+    /* home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$1(ctx) {
     	let current;
@@ -2269,20 +2322,32 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Router> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Router", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { routes, options, $activeRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		SpaRouter: spa_router_1,
+    		Route,
+    		activeRoute: store_1,
+    		routes,
+    		options,
+    		$activeRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
-    		if ("$activeRoute" in $$props) store_1.set($activeRoute = $$props.$activeRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [$activeRoute, routes, options];
     }
@@ -2322,8 +2387,8 @@ var app = (function () {
         'default': Router
     });
 
-    /* node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.18.1 */
-    const file = "node_modules/svelte-router-spa/src/components/navigate.svelte";
+    /* home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.20.1 */
+    const file = "home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte";
 
     function create_fragment$2(ctx) {
     	let a;
@@ -2345,7 +2410,7 @@ var app = (function () {
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, a, anchor);
 
     			if (default_slot) {
@@ -2353,11 +2418,14 @@ var app = (function () {
     			}
 
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(a, "click", /*navigate*/ ctx[3], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
-    			if (default_slot && default_slot.p && dirty & /*$$scope*/ 32) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    			if (default_slot) {
+    				if (default_slot.p && dirty & /*$$scope*/ 32) {
+    					default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    				}
     			}
 
     			if (!current || dirty & /*to*/ 1) {
@@ -2432,6 +2500,7 @@ var app = (function () {
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navigate", $$slots, ['default']);
 
     	$$self.$set = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2441,9 +2510,17 @@ var app = (function () {
     		if ("$$scope" in $$props) $$invalidate(5, $$scope = $$props.$$scope);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { to, title, styles, lang };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		localisedRoute: spa_router_2,
+    		navigateTo: spa_router_3,
+    		routeIsActive: spa_router_4,
+    		to,
+    		title,
+    		styles,
+    		lang,
+    		navigate
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2451,6 +2528,10 @@ var app = (function () {
     		if ("styles" in $$props) $$invalidate(2, styles = $$props.styles);
     		if ("lang" in $$props) $$invalidate(4, lang = $$props.lang);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [to, title, styles, navigate, lang, $$scope, $$slots];
     }
@@ -3780,7 +3861,8 @@ var app = (function () {
 
             KEY_MODS: {
                 "ctrl": 1, "alt": 2, "option" : 2, "shift": 4,
-                "super": 8, "meta": 8, "command": 8, "cmd": 8
+                "super": 8, "meta": 8, "command": 8, "cmd": 8, 
+                "control": 1
             },
 
             FUNCTION_KEYS : {
@@ -4662,6 +4744,7 @@ var app = (function () {
     var MODS = KEYS.KEY_MODS;
     var isIOS = useragent.isIOS;
     var valueResetRegex = isIOS ? /\s/ : /\n/;
+    var isMobile = useragent.isMobile;
 
     var TextInput = function(parentNode, host) {
         var text = dom.createElement("textarea");
@@ -4681,7 +4764,7 @@ var app = (function () {
         var sendingText = false;
         var tempStyle = '';
         
-        if (!useragent.isMobile)
+        if (!isMobile)
             text.style.fontSize = "1px";
 
         var commandMode = false;
@@ -4811,6 +4894,11 @@ var app = (function () {
                 selectionEnd += line.length + 1;
                 line = line + "\n" + nextLine;
             }
+            else if (isMobile) {
+                line = "\n" + line;
+                selectionEnd += 1;
+                selectionStart += 1;
+            }
 
             if (line.length > MAX_LINE_LENGTH) {
                 if (selectionStart < MAX_LINE_LENGTH && selectionEnd < MAX_LINE_LENGTH) {
@@ -4862,6 +4950,8 @@ var app = (function () {
                 copied = false;
             } else if (isAllSelected(text)) {
                 host.selectAll();
+                resetSelection();
+            } else if (isMobile && text.selectionStart != lastSelectionStart) {
                 resetSelection();
             }
         };
@@ -4941,8 +5031,13 @@ var app = (function () {
             }
             var data = text.value;
             var inserted = sendText(data, true);
-            if (data.length > MAX_LINE_LENGTH + 100 || valueResetRegex.test(inserted))
+            if (
+                data.length > MAX_LINE_LENGTH + 100 
+                || valueResetRegex.test(inserted)
+                || isMobile && lastSelectionStart < 1 && lastSelectionStart == lastSelectionEnd
+            ) {
                 resetSelection();
+            }
         };
         
         var handleClipboardData = function(e, data, forceIEMime) {
@@ -6465,7 +6560,6 @@ var app = (function () {
                 showContextMenu();
             } else if (mode == "scroll") {
                 animate();
-                e.preventDefault();
                 hideContextMenu();
             } else {
                 showContextMenu();
@@ -7033,7 +7127,7 @@ var app = (function () {
         return str.replace(/-(.)/g, function(m, m1) { return m1.toUpperCase(); });
     }
 
-    exports.version = "1.4.8";
+    exports.version = "1.4.9";
 
     });
 
@@ -7499,7 +7593,7 @@ var app = (function () {
     			if(condPos == -1){
     				condPos = ix;
     			}
-    		}else{
+    		}else {
     			if (condPos > -1){
     				for(i = condPos; i < ix; i++){
     					levels[i] = newLevel;
@@ -7519,7 +7613,7 @@ var app = (function () {
     				for(var j = i - 1; j >= 0; j--){
     					if(charTypes[j] == WS){
     						levels[j] = dir;
-    					}else{
+    					}else {
     						break;
     					}
     				}
@@ -10500,6 +10594,16 @@ var app = (function () {
             }
         };
         
+        this.$safeApplyDelta = function(delta) {
+            var docLength = this.$lines.length;
+            if (
+                delta.action == "remove" && delta.start.row < docLength && delta.end.row < docLength
+                || delta.action == "insert" && delta.start.row <= docLength
+            ) {
+                this.applyDelta(delta);
+            }
+        };
+        
         this.$splitAndapplyLargeDelta = function(delta, MAX) {
             var lines = delta.lines;
             var l = lines.length - MAX + 1;
@@ -10522,7 +10626,7 @@ var app = (function () {
             this.applyDelta(delta, true);
         };
         this.revertDelta = function(delta) {
-            this.applyDelta({
+            this.$safeApplyDelta({
                 start: this.clonePos(delta.start),
                 end: this.clonePos(delta.end),
                 action: (delta.action == "insert" ? "remove" : "insert"),
@@ -12947,7 +13051,7 @@ var app = (function () {
             for (var i = 0; i < deltas.length; i++) {
                 var delta = deltas[i];
                 if (delta.action == "insert" || delta.action == "remove") {
-                    this.doc.applyDelta(delta);
+                    this.doc.$safeApplyDelta(delta);
                 }
             }
 
@@ -15359,6 +15463,13 @@ var app = (function () {
         multiSelectAction: "forEach",
         scrollIntoView: "cursor"
     }, {
+        name: "autoindent",
+        description: "Auto Indent",
+        bindKey: bindKey(null, null),
+        exec: function(editor) { editor.autoIndent(); },
+        multiSelectAction: "forEachLine",
+        scrollIntoView: "animate"
+    }, {
         name: "expandtoline",
         description: "Expand to line",
         bindKey: bindKey("Ctrl-Shift-L", "Command-Shift-L"),
@@ -15604,7 +15715,7 @@ var app = (function () {
 
         this.endOperation = function(e) {
             if (this.curOp) {
-                if (e && e.returnValue === false)
+                if (e && e.returnValue === false || !this.session)
                     return (this.curOp = null);
                 if (e == true && this.curOp.command && this.curOp.command.name == "mouse")
                     return;
@@ -16285,15 +16396,61 @@ var app = (function () {
                                   transform.selection[3]));
                 }
             }
+            if (this.$enableAutoIndent) {
+                if (session.getDocument().isNewLine(text)) {
+                    var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
 
-            if (session.getDocument().isNewLine(text)) {
-                var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
-
-                session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                    session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                }
+                if (shouldOutdent)
+                    mode.autoOutdent(lineState, session, cursor.row);
             }
-            if (shouldOutdent)
-                mode.autoOutdent(lineState, session, cursor.row);
         };
+
+        this.autoIndent = function () {
+            var session = this.session;
+            var mode = session.getMode();
+
+            var startRow, endRow;
+            if (this.selection.isEmpty()) {
+                startRow = 0;
+                endRow = session.doc.getLength() - 1;
+            } else {
+                var selectedRange = this.getSelectionRange();
+
+                startRow = selectedRange.start.row;
+                endRow = selectedRange.end.row;
+            }
+
+            var prevLineState = "";
+            var prevLine = "";
+            var lineIndent = "";
+            var line, currIndent, range;
+            var tab = session.getTabString();
+
+            for (var row = startRow; row <= endRow; row++) {
+                if (row > 0) {
+                    prevLineState = session.getState(row - 1);
+                    prevLine = session.getLine(row - 1);
+                    lineIndent = mode.getNextLineIndent(prevLineState, prevLine, tab);
+                }
+
+                line = session.getLine(row);
+                currIndent = mode.$getIndent(line);
+                if (lineIndent !== currIndent) {
+                    if (currIndent.length > 0) {
+                        range = new Range(row, 0, row, currIndent.length);
+                        session.remove(range);
+                    }
+                    if (lineIndent.length > 0) {
+                        session.insert({row: row, column: 0}, lineIndent);
+                    }
+                }
+
+                mode.autoOutdent(prevLineState, session, row);
+            }
+        };
+
 
         this.onTextInput = function(text, composition) {
             if (!composition)
@@ -16313,6 +16470,10 @@ var app = (function () {
                 var r = this.selection.getRange();
                 r.start.column -= composition.extendLeft;
                 r.end.column += composition.extendRight;
+                if (r.start.column < 0) {
+                    r.start.row--;
+                    r.start.column += this.session.getLine(r.start.row).length + 1;
+                }
                 this.selection.setRange(r);
                 if (!text && !r.isEmpty())
                     this.remove();
@@ -17440,6 +17601,7 @@ var app = (function () {
         },
         behavioursEnabled: {initialValue: true},
         wrapBehavioursEnabled: {initialValue: true},
+        enableAutoIndent: {initialValue: true},
         autoScrollEditorIntoView: {
             set: function(val) {this.setAutoScrollEditorIntoView(val);}
         },
@@ -17484,7 +17646,7 @@ var app = (function () {
             set: function(message) {
                 if (!this.$updatePlaceholder) {
                     this.$updatePlaceholder = function() {
-                        var value = this.renderer.$composition || this.getValue();
+                        var value = this.session && (this.renderer.$composition || this.getValue());
                         if (value && this.renderer.placeholderNode) {
                             this.renderer.off("afterRender", this.$updatePlaceholder);
                             dom.removeCssClass(this.container, "ace_hasPlaceholder");
@@ -17498,6 +17660,8 @@ var app = (function () {
                             el.textContent = this.$placeholder || "";
                             this.renderer.placeholderNode = el;
                             this.renderer.content.appendChild(this.renderer.placeholderNode);
+                        } else if (!value && this.renderer.placeholderNode) {
+                            this.renderer.placeholderNode.textContent = this.$placeholder || "";
                         }
                     }.bind(this);
                     this.on("input", this.$updatePlaceholder);
@@ -17671,25 +17835,6 @@ var app = (function () {
             if (to == null) to = this.$rev + 1;
             
         };
-
-        this.validateDeltaBoundaries = function(deltaSet, docLength, invertAction) {
-            if (!deltaSet) {
-                return false;
-            }
-            return deltaSet.every(function(delta) {
-                var action = delta.action;
-                if (invertAction && delta.action === "insert") action = "remove";
-                if (invertAction && delta.action === "remove") action = "insert";
-                switch(action) {
-                    case "insert":
-                        return delta.start.row <= docLength;
-                    case "remove":
-                        return delta.start.row < docLength && delta.end.row < docLength;
-                    default:
-                        return true;
-                }
-            });
-        };
         this.undo = function(session, dontSelect) {
             this.lastDeltas = null;
             var stack = this.$undoStack;
@@ -17707,7 +17852,7 @@ var app = (function () {
             
             var deltaSet = stack.pop();
             var undoSelectionRange = null;
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), true)) {
+            if (deltaSet) {
                 undoSelectionRange = session.undoChanges(deltaSet, dontSelect);
                 this.$redoStack.push(deltaSet);
                 this.$syncRev();
@@ -17735,7 +17880,7 @@ var app = (function () {
             var deltaSet = this.$redoStack.pop();
             var redoSelectionRange = null;
             
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), false)) {
+            if (deltaSet) {
                 redoSelectionRange = session.redoChanges(deltaSet, dontSelect);
                 this.$undoStack.push(deltaSet);
                 this.$syncRev();
@@ -18879,11 +19024,21 @@ var app = (function () {
         };
 
         this.showInvisibles = false;
+        this.showSpaces = false;
+        this.showTabs = false;
+        this.showEOL = false;
         this.setShowInvisibles = function(showInvisibles) {
             if (this.showInvisibles == showInvisibles)
                 return false;
 
             this.showInvisibles = showInvisibles;
+            if (typeof showInvisibles == "string") {
+                this.showSpaces = /tab/i.test(showInvisibles);
+                this.showTabs = /space/i.test(showInvisibles);
+                this.showEOL = /eol/i.test(showInvisibles);
+            } else {
+                this.showSpaces = this.showTabs = this.showEOL = showInvisibles;
+            }
             this.$computeTabString();
             return true;
         };
@@ -18905,7 +19060,7 @@ var app = (function () {
             this.tabSize = tabSize;
             var tabStr = this.$tabStrings = [0];
             for (var i = 1; i < tabSize + 1; i++) {
-                if (this.showInvisibles) {
+                if (this.showTabs) {
                     var span = this.dom.createElement("span");
                     span.className = "ace_invisible ace_invisible_tab";
                     span.textContent = lang.stringRepeat(this.TAB_CHAR, i);
@@ -18917,18 +19072,15 @@ var app = (function () {
             if (this.displayIndentGuides) {
                 this.$indentGuideRe =  /\s\S| \t|\t |\s$/;
                 var className = "ace_indent-guide";
-                var spaceClass = "";
-                var tabClass = "";
-                if (this.showInvisibles) {
-                    className += " ace_invisible";
-                    spaceClass = " ace_invisible_space";
-                    tabClass = " ace_invisible_tab";
-                    var spaceContent = lang.stringRepeat(this.SPACE_CHAR, this.tabSize);
-                    var tabContent = lang.stringRepeat(this.TAB_CHAR, this.tabSize);
-                } else {
-                    var spaceContent = lang.stringRepeat(" ", this.tabSize);
-                    var tabContent = spaceContent;
-                }
+                var spaceClass = this.showSpaces ? " ace_invisible ace_invisible_space" : "";
+                var spaceContent = this.showSpaces
+                    ? lang.stringRepeat(this.SPACE_CHAR, this.tabSize)
+                    : lang.stringRepeat(" ", this.tabSize);
+
+                var tabClass = this.showTabs ? " ace_invisible ace_invisible_tab" : "";
+                var tabContent = this.showTabs 
+                    ? lang.stringRepeat(this.TAB_CHAR, this.tabSize)
+                    : spaceContent;
 
                 var span = this.dom.createElement("span");
                 span.className = className + spaceClass;
@@ -19121,7 +19273,7 @@ var app = (function () {
                 var cjkSpace = m[4];
                 var cjk = m[5];
                 
-                if (!self.showInvisibles && simpleSpace)
+                if (!self.showSpaces && simpleSpace)
                     continue;
 
                 var before = i != m.index ? value.slice(i, m.index) : "";
@@ -19137,7 +19289,7 @@ var app = (function () {
                     valueFragment.appendChild(self.$tabStrings[tabSize].cloneNode(true));
                     screenColumn += tabSize - 1;
                 } else if (simpleSpace) {
-                    if (self.showInvisibles) {
+                    if (self.showSpaces) {
                         var span = this.dom.createElement("span");
                         span.className = "ace_invisible ace_invisible_space";
                         span.textContent = lang.stringRepeat(self.SPACE_CHAR, simpleSpace.length);
@@ -19155,8 +19307,8 @@ var app = (function () {
                     
                     var span = this.dom.createElement("span");
                     span.style.width = (self.config.characterWidth * 2) + "px";
-                    span.className = self.showInvisibles ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
-                    span.textContent = self.showInvisibles ? self.SPACE_CHAR : cjkSpace;
+                    span.className = self.showSpaces ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
+                    span.textContent = self.showSpaces ? self.SPACE_CHAR : cjkSpace;
                     valueFragment.appendChild(span);
                 } else if (cjk) {
                     screenColumn += 1;
@@ -19325,7 +19477,7 @@ var app = (function () {
                 parent.appendChild(lastLineEl);
             }
 
-            if (this.showInvisibles && lastLineEl) {
+            if (this.showEOL && lastLineEl) {
                 if (foldLine)
                     row = foldLine.end.row;
 
@@ -19853,7 +20005,7 @@ var app = (function () {
         this.el.appendChild(this.$measureNode);
         parentEl.appendChild(this.el);
         
-        this.$measureNode.innerHTML = lang.stringRepeat("X", CHAR_COUNT);
+        this.$measureNode.textContent = lang.stringRepeat("X", CHAR_COUNT);
         
         this.$characterSize = {width: 0, height: 0};
         
@@ -19942,7 +20094,7 @@ var app = (function () {
         };
 
         this.$measureCharWidth = function(ch) {
-            this.$main.innerHTML = lang.stringRepeat(ch, CHAR_COUNT);
+            this.$main.textContent = lang.stringRepeat(ch, CHAR_COUNT);
             var rect = this.$main.getBoundingClientRect();
             return rect.width / CHAR_COUNT;
         };
@@ -20058,6 +20210,7 @@ var app = (function () {
 .ace_editor {\
 position: relative;\
 overflow: hidden;\
+padding: 0;\
 font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;\
 direction: ltr;\
 text-align: left;\
@@ -24857,6 +25010,12 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 }
                 snippetMap[scope].push(s);
 
+                if (s.prefix)
+                    s.tabTrigger = s.prefix;
+
+                if (!s.content && s.body)
+                    s.content = Array.isArray(s.body) ? s.body.join("\n") : s.body;
+
                 if (s.tabTrigger && !s.trigger) {
                     if (!s.guard && /^\w/.test(s.tabTrigger))
                         s.guard = "\\b";
@@ -24873,10 +25032,13 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 s.endTriggerRe = new RegExp(s.endTrigger);
             }
 
-            if (snippets && snippets.content)
-                addSnippet(snippets);
-            else if (Array.isArray(snippets))
+            if (Array.isArray(snippets)) {
                 snippets.forEach(addSnippet);
+            } else {
+                Object.keys(snippets).forEach(function(key) {
+                    addSnippet(snippets[key]);
+                });
+            }
             
             this._signal("registerSnippets", {scope: scope});
         };
@@ -24926,7 +25088,7 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                         snippet.tabTrigger = val.match(/^\S*/)[0];
                         if (!snippet.name)
                             snippet.name = val;
-                    } else {
+                    } else if (key) {
                         snippet[key] = val;
                     }
                 }
@@ -26270,31 +26432,33 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
     };
 
     var loadSnippetsForMode = function(mode) {
-        var id = mode.$id;
+        if (typeof mode == "string")
+            mode = config.$modes[mode];
+        if (!mode)
+            return;
         if (!snippetManager.files)
             snippetManager.files = {};
-        loadSnippetFile(id);
+        
+        loadSnippetFile(mode.$id, mode.snippetFileId);
         if (mode.modes)
             mode.modes.forEach(loadSnippetsForMode);
     };
 
-    var loadSnippetFile = function(id) {
-        if (!id || snippetManager.files[id])
+    var loadSnippetFile = function(id, snippetFilePath) {
+        if (!snippetFilePath || !id || snippetManager.files[id])
             return;
-        var snippetFilePath = id.replace("mode", "snippets");
         snippetManager.files[id] = {};
         config.loadModule(snippetFilePath, function(m) {
-            if (m) {
-                snippetManager.files[id] = m;
-                if (!m.snippets && m.snippetText)
-                    m.snippets = snippetManager.parseSnippetFile(m.snippetText);
-                snippetManager.register(m.snippets || [], m.scope);
-                if (m.includeScopes) {
-                    snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
-                    m.includeScopes.forEach(function(x) {
-                        loadSnippetFile("ace/mode/" + x);
-                    });
-                }
+            if (!m) return;
+            snippetManager.files[id] = m;
+            if (!m.snippets && m.snippetText)
+                m.snippets = snippetManager.parseSnippetFile(m.snippetText);
+            snippetManager.register(m.snippets || [], m.scope);
+            if (m.includeScopes) {
+                snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
+                m.includeScopes.forEach(function(x) {
+                    loadSnippetsForMode("ace/mode/" + x);
+                });
             }
         });
     };
@@ -27372,6 +27536,7 @@ guard ^\\s*\n\
         };
 
         this.$id = "ace/mode/javascript";
+        this.snippetFileId = "ace/snippets/javascript";
     }).call(Mode.prototype);
 
     exports.Mode = Mode;
@@ -27697,7 +27862,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       $dataStore.find(({ active }) => active)
     );
 
-    /* src/EditorWindow.svelte generated by Svelte v3.18.1 */
+    /* src/EditorWindow.svelte generated by Svelte v3.20.1 */
     const file$1 = "src/EditorWindow.svelte";
 
     function create_fragment$3(ctx) {
@@ -27714,8 +27879,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(div, "keydown", /*onInput*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -27781,14 +27947,33 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<EditorWindow> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorWindow", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		dataStore,
+    		currentTab,
+    		editor,
+    		onInput,
+    		$currentTab
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [onInput];
     }
@@ -27807,7 +27992,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/EditorArea.svelte generated by Svelte v3.18.1 */
+    /* src/EditorArea.svelte generated by Svelte v3.20.1 */
 
     const file$2 = "src/EditorArea.svelte";
 
@@ -27878,7 +28063,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div4, anchor);
     			append_dev(div4, h1);
     			append_dev(h1, t0);
@@ -27896,6 +28081,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div3, t9);
     			append_dev(div3, div2);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(window, "keydown", /*keydown_handler*/ ctx[5], false, false, false),
@@ -27951,6 +28137,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let outputData = "";
     	let outputCheck = "";
     	let dragging = false;
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<EditorArea> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorArea", $$slots, []);
 
     	const keydown_handler = e => {
     		if (!e.altKey || e.key !== "r") {
@@ -27976,19 +28170,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, dragging = false);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		EditorWindow,
+    		currentTab,
+    		outputData,
+    		outputCheck,
+    		dragging,
+    		runHandler,
+    		height,
+    		$currentTab
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("outputData" in $$props) $$invalidate(3, outputData = $$props.outputData);
     		if ("outputCheck" in $$props) $$invalidate(4, outputCheck = $$props.outputCheck);
     		if ("dragging" in $$props) $$invalidate(0, dragging = $$props.dragging);
     		if ("height" in $$props) $$invalidate(1, height = $$props.height);
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
     	};
 
     	let height;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, height = "40vh");
 
     	return [
@@ -28019,7 +28224,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Tabs.svelte generated by Svelte v3.18.1 */
+    /* src/Tabs.svelte generated by Svelte v3.20.1 */
     const file$3 = "src/Tabs.svelte";
 
     function get_each_context(ctx, list, i) {
@@ -28056,12 +28261,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div, "class", "flex-grow flex parentDiv svelte-il7k4h");
     			add_location(div, file$3, 70, 4, 1262);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			append_dev(div, li);
     			append_dev(li, t0);
     			append_dev(li, t1);
     			append_dev(div, t2);
+    			if (remount) dispose();
     			dispose = listen_dev(li, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -28092,6 +28298,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function create_fragment$5(ctx) {
     	let ul;
     	let each_value = /*$dataStore*/ ctx[0];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -28122,6 +28329,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*$dataStore, dataStore*/ 1) {
     				each_value = /*$dataStore*/ ctx[0];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -28166,16 +28374,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let $dataStore;
     	validate_store(dataStore, "dataStore");
     	component_subscribe($$self, dataStore, $$value => $$invalidate(0, $dataStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Tabs> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tabs", $$slots, []);
     	const click_handler = tab => dataStore.activate(tab.id);
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
-    	};
-
+    	$$self.$capture_state = () => ({ dataStore, $dataStore });
     	return [$dataStore, click_handler];
     }
 
@@ -28696,10 +28904,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function __awaiter(thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
         return new (P || (P = Promise))(function (resolve, reject) {
             function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
             function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
             step((generator = generator.apply(thisArg, _arguments || [])).next());
         });
     }
@@ -28795,7 +29004,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             // extra care to replace process.env.NODE_ENV in their production builds,
             // or define an appropriate global.process polyfill.
         }
-    //# sourceMappingURL=invariant.esm.js.map
 
     var fastJsonStableStringify = function (data, opts) {
         if (!opts) opts = {};
@@ -28980,7 +29188,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         bSet.add(b);
         return false;
     }
-    //# sourceMappingURL=equality.esm.js.map
 
     function isStringValue(value) {
         return value.kind === 'StringValue';
@@ -29764,7 +29971,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return value;
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     var OBSERVABLE;
     function isObservable(value) {
@@ -29820,7 +30026,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return function () { return subscription.unsubscribe(); };
         });
     }
-    //# sourceMappingURL=svelte-observable.es.js.map
 
     var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
     function getClient() {
@@ -29895,7 +30100,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         var observable = client.subscribe(options);
         return observe(observable);
     }
-    //# sourceMappingURL=svelte-apollo.es.js.map
 
     function devAssert(condition, message) {
       var booleanCondition = Boolean(condition);
@@ -33084,7 +33288,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
       setCookie
     };
 
-    /* src/Modals/userModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/userModal.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1 } = globals;
     const file$4 = "src/Modals/userModal.svelte";
 
     function create_fragment$6(ctx) {
@@ -33154,63 +33360,63 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(p, "class", "text-2xl font-bold");
-    			add_location(p, file$4, 29, 4, 737);
+    			add_location(p, file$4, 29, 4, 736);
     			attr_dev(div0, "class", "flex justify-between items-center pb-3");
-    			add_location(div0, file$4, 28, 2, 680);
+    			add_location(div0, file$4, 28, 2, 679);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$4, 34, 8, 910);
+    			add_location(label0, file$4, 34, 8, 909);
     			attr_dev(div1, "class", "md:w-1/3");
-    			add_location(div1, file$4, 33, 6, 879);
+    			add_location(div1, file$4, 33, 6, 878);
     			attr_dev(input, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(input, "id", "inline-full-name");
     			attr_dev(input, "type", "text");
     			attr_dev(input, "placeholder", "Name");
-    			add_location(input, file$4, 41, 8, 1113);
+    			add_location(input, file$4, 41, 8, 1112);
     			attr_dev(div2, "class", "md:w-2/3");
-    			add_location(div2, file$4, 40, 6, 1082);
+    			add_location(div2, file$4, 40, 6, 1081);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$4, 32, 4, 830);
+    			add_location(div3, file$4, 32, 4, 829);
     			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-username");
-    			add_location(label1, file$4, 53, 8, 1549);
+    			add_location(label1, file$4, 53, 8, 1548);
     			attr_dev(div4, "class", "md:w-1/3");
-    			add_location(div4, file$4, 52, 6, 1518);
+    			add_location(div4, file$4, 52, 6, 1517);
     			attr_dev(textarea0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(textarea0, "id", "inline-username");
     			attr_dev(textarea0, "type", "text-area");
     			attr_dev(textarea0, "placeholder", "College Name");
-    			add_location(textarea0, file$4, 60, 8, 1759);
+    			add_location(textarea0, file$4, 60, 8, 1758);
     			attr_dev(div5, "class", "md:w-2/3");
-    			add_location(div5, file$4, 59, 6, 1728);
+    			add_location(div5, file$4, 59, 6, 1727);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$4, 51, 4, 1469);
+    			add_location(div6, file$4, 51, 4, 1468);
     			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label2, "for", "inline-username");
-    			add_location(label2, file$4, 72, 8, 2217);
+    			add_location(label2, file$4, 72, 8, 2216);
     			attr_dev(div7, "class", "md:w-1/3");
-    			add_location(div7, file$4, 71, 6, 2186);
+    			add_location(div7, file$4, 71, 6, 2185);
     			attr_dev(textarea1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(textarea1, "id", "inline-username");
     			attr_dev(textarea1, "type", "text-area");
     			attr_dev(textarea1, "placeholder", "E-mail");
-    			add_location(textarea1, file$4, 79, 8, 2421);
+    			add_location(textarea1, file$4, 79, 8, 2420);
     			attr_dev(div8, "class", "md:w-2/3");
-    			add_location(div8, file$4, 78, 6, 2390);
+    			add_location(div8, file$4, 78, 6, 2389);
     			attr_dev(div9, "class", "md:flex md:items-center mb-6");
-    			add_location(div9, file$4, 70, 4, 2137);
+    			add_location(div9, file$4, 70, 4, 2136);
     			attr_dev(form, "class", "w-full max-w-md");
-    			add_location(form, file$4, 31, 2, 795);
+    			add_location(form, file$4, 31, 2, 794);
     			attr_dev(button, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500\n      hover:bg-gray-100 hover:text-indigo-400 mr-2");
-    			add_location(button, file$4, 91, 4, 2835);
+    			add_location(button, file$4, 91, 4, 2834);
     			attr_dev(div10, "class", "flex justify-end pt-2");
-    			add_location(div10, file$4, 90, 2, 2795);
-    			add_location(div11, file$4, 27, 0, 672);
+    			add_location(div10, file$4, 90, 2, 2794);
+    			add_location(div11, file$4, 27, 0, 671);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div11, anchor);
     			append_dev(div11, div0);
     			append_dev(div0, p);
@@ -33242,6 +33448,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(div11, t10);
     			append_dev(div11, div10);
     			append_dev(div10, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "input", /*input_input_handler*/ ctx[4]),
@@ -33299,9 +33506,18 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			console.log(err);
     		}
 
-    		cookieHandler.setCookie("loggedIn", "true", 10);
+    		cookieHandler.setCookie("loggedIn", "true", 1);
     		close();
     	}
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<UserModal> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("UserModal", $$slots, []);
 
     	function input_input_handler() {
     		user.name = this.value;
@@ -33318,13 +33534,25 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		$$invalidate(0, user);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		getClient,
+    		mutate,
+    		apolloClient,
+    		cookieHandler,
+    		close,
+    		user,
+    		client,
+    		clickHandler
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("user" in $$props) $$invalidate(0, user = $$props.user);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		user,
@@ -33351,7 +33579,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Modals/userHelper.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/userHelper.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$7(ctx) {
     	const block = {
@@ -33377,25 +33605,33 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$7($$self) {
+    function instance$7($$self, $$props, $$invalidate) {
     	const { open } = getContext("simple-modal");
 
     	const showSurprise = () => {
     		open(UserModal, {}, {
     			closeOnEsc: false,
-    			closeOnOuterClick: false
+    			closeOnOuterClick: false,
+    			closeButton: false
     		});
     	};
 
     	showSurprise();
+    	const writable_props = [];
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<UserHelper> was created with unknown prop '${key}'`);
+    	});
 
-    	$$self.$inject_state = $$props => {
-    		
-    	};
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("UserHelper", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		UserModal,
+    		open,
+    		showSurprise
+    	});
 
     	return [];
     }
@@ -33424,10 +33660,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
     }
 
-    /* node_modules/svelte-simple-modal/src/Modal.svelte generated by Svelte v3.18.1 */
+    /* home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-simple-modal/0.3.0_svelte@3.20.1/node_modules/svelte-simple-modal/src/Modal.svelte generated by Svelte v3.20.1 */
 
     const { Object: Object_1 } = globals;
-    const file$5 = "node_modules/svelte-simple-modal/src/Modal.svelte";
+    const file$5 = "home/rajat/Documents/rajat/Editor-IDE/node_modules/.pnpm/registry.npmjs.org/svelte-simple-modal/0.3.0_svelte@3.20.1/node_modules/svelte-simple-modal/src/Modal.svelte";
 
     // (201:2) {#if Component}
     function create_if_block$1(ctx) {
@@ -33471,7 +33707,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			attr_dev(div3, "style", /*cssBg*/ ctx[5]);
     			add_location(div3, file$5, 201, 4, 4381);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div1);
@@ -33482,6 +33718,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			/*div2_binding*/ ctx[31](div2);
     			/*div3_binding*/ ctx[32](div3);
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(div3, "click", /*handleOuterClick*/ ctx[12], false, false, false);
     		},
     		p: function update(ctx, dirty) {
@@ -33574,8 +33811,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			attr_dev(button, "class", "close svelte-fnsfcv");
     			add_location(button, file$5, 215, 12, 4801);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, button, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*close*/ ctx[10], false, false, false);
     		},
     		p: noop,
@@ -33617,7 +33855,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			if (if_block) if_block.m(div, null);
     			append_dev(div, t);
@@ -33627,6 +33865,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			}
 
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(window, "keyup", /*handleKeyup*/ ctx[11], false, false, false);
     		},
     		p: function update(ctx, dirty) {
@@ -33650,8 +33889,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     				check_outros();
     			}
 
-    			if (default_slot && default_slot.p && dirty[0] & /*$$scope*/ 536870912) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[29], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[29], dirty, null));
+    			if (default_slot) {
+    				if (default_slot.p && dirty[0] & /*$$scope*/ 536870912) {
+    					default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[29], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[29], dirty, null));
+    				}
     			}
     		},
     		i: function intro(local) {
@@ -33766,6 +34007,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Modal", $$slots, ['default']);
 
     	function div2_binding($$value) {
     		binding_callbacks[$$value ? "unshift" : "push"](() => {
@@ -33795,32 +34037,39 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		if ("$$scope" in $$props) $$invalidate(29, $$scope = $$props.$$scope);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			key,
-    			closeButton,
-    			closeOnEsc,
-    			closeOnOuterClick,
-    			styleBg,
-    			styleWindow,
-    			styleContent,
-    			setContext: setContext$1,
-    			transitionBg,
-    			transitionBgProps,
-    			transitionWindow,
-    			transitionWindowProps,
-    			state,
-    			Component,
-    			props,
-    			background,
-    			wrap,
-    			cssBg,
-    			cssWindow,
-    			cssContent,
-    			currentTransitionBg,
-    			currentTransitionWindow
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		baseSetContext: setContext,
+    		fade,
+    		key,
+    		closeButton,
+    		closeOnEsc,
+    		closeOnOuterClick,
+    		styleBg,
+    		styleWindow,
+    		styleContent,
+    		setContext: setContext$1,
+    		transitionBg,
+    		transitionBgProps,
+    		transitionWindow,
+    		transitionWindowProps,
+    		defaultState,
+    		state,
+    		Component,
+    		props,
+    		background,
+    		wrap,
+    		camelCaseToDash,
+    		toCssString,
+    		open,
+    		close,
+    		handleKeyup,
+    		handleOuterClick,
+    		cssBg,
+    		cssWindow,
+    		cssContent,
+    		currentTransitionBg,
+    		currentTransitionWindow
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("key" in $$props) $$invalidate(13, key = $$props.key);
@@ -33852,6 +34101,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	let cssContent;
     	let currentTransitionBg;
     	let currentTransitionWindow;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty[0] & /*state*/ 1) {
@@ -34044,9 +34297,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Home.svelte generated by Svelte v3.18.1 */
+    /* src/Home.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1 } = globals;
+    const { console: console_1$1 } = globals;
     const file$6 = "src/Home.svelte";
 
     // (61:0) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
@@ -34066,7 +34319,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		c: function create() {
     			div = element("div");
     			create_component(modal.$$.fragment);
-    			add_location(div, file$6, 61, 2, 1976);
+    			add_location(div, file$6, 61, 2, 1985);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34150,7 +34403,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			add_location(h1, file$6, 76, 2, 2214);
+    			add_location(h1, file$6, 76, 2, 2223);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34188,7 +34441,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			t = space();
     			create_component(editorarea.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$6, 71, 2, 2125);
+    			add_location(div, file$6, 71, 2, 2134);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34235,7 +34488,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			add_location(h1, file$6, 69, 2, 2075);
+    			add_location(h1, file$6, 69, 2, 2084);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34264,7 +34517,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	let await_block_anchor;
     	let promise;
     	let current;
-    	let dispose;
     	let if_block = show_if && create_if_block$2(ctx);
 
     	let info = {
@@ -34274,8 +34526,8 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		pending: create_pending_block,
     		then: create_then_block,
     		catch: create_catch_block,
-    		value: 7,
-    		error: 8,
+    		value: 4,
+    		error: 5,
     		blocks: [,,,]
     	};
 
@@ -34299,7 +34551,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			info.mount = () => await_block_anchor.parentNode;
     			info.anchor = await_block_anchor;
     			current = true;
-    			dispose = listen_dev(window, "keydown", /*keydown_handler*/ ctx[6], false, false, false);
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
@@ -34329,7 +34580,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			info.block.d(detaching);
     			info.token = null;
     			info = null;
-    			dispose();
     		}
     	};
 
@@ -34344,14 +34594,12 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
+    function updateStore$1(result) {
+    	console.log(result);
+    }
+
     function instance$9($$self, $$props, $$invalidate) {
     	let $problems;
-    	let $currentTab;
-    	let $dataStore;
-    	validate_store(currentTab, "currentTab");
-    	component_subscribe($$self, currentTab, $$value => $$invalidate(1, $currentTab = $$value));
-    	validate_store(dataStore, "dataStore");
-    	component_subscribe($$self, dataStore, $$value => $$invalidate(2, $dataStore = $$value));
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	const client = getClient();
@@ -34371,80 +34619,52 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Home> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<Home> was created with unknown prop '${key}'`);
     	});
 
-    	const keydown_handler = evt => {
-    		if (evt.ctrlKey && evt.key === "s" && $currentTab.changeData) {
-    			console.log(evt);
-    			evt.preventDefault();
-    			dataStore.changeDataUpdate($currentTab.id);
-    		} else if (evt.ctrlKey && evt.altKey && evt.key === "p" && $currentTab.changeData === false) {
-    			evt.preventDefault();
-    			dataStore.changeDataUpdate($currentTab.id);
-    		} else if (evt.ctrlKey && evt.key === "p" && evt.altKey === false) {
-    			evt.preventDefault();
-    			dataStore.add();
-    		} else if (evt.ctrlKey && evt.altKey && evt.key === "c") {
-    			const id = $currentTab.id;
-
-    			if ($dataStore.length === 1) {
-    				return;
-    			}
-
-    			$dataStore.some((tab, index) => {
-    				if (tab.id !== $currentTab.id) {
-    					return false;
-    				}
-
-    				if (index === 0) {
-    					dataStore.activate($dataStore[index + 1].id);
-    					return true;
-    				}
-
-    				dataStore.activate($dataStore[index - 1].id);
-    				return true;
-    			});
-
-    			dataStore.deleteTab(id);
-    		}
-    	};
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Home", $$slots, []);
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(4, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			$problems,
-    			$currentTab,
-    			$dataStore
-    		};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(4, currentRoute = $$props.currentRoute);
-    		if ("$problems" in $$props) problems.set($problems = $$props.$problems);
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
-    	};
-
-    	return [
-    		$problems,
-    		$currentTab,
-    		$dataStore,
-    		problems,
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		EditorArea,
+    		Tabs,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		apolloClient,
+    		dataStore,
+    		currentTab,
+    		getContext,
+    		Content: UserHelper,
+    		Modal,
+    		cookieHandler,
     		currentRoute,
     		client,
-    		keydown_handler
-    	];
+    		problems,
+    		updateStore: updateStore$1,
+    		$problems
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [$problems, problems, currentRoute];
     }
 
     class Home extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$9, create_fragment$9, safe_not_equal, { currentRoute: 4 });
+    		init(this, options, instance$9, create_fragment$9, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -34456,8 +34676,8 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[4] === undefined && !("currentRoute" in props)) {
-    			console_1.warn("<Home> was created without expected prop 'currentRoute'");
+    		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
+    			console_1$1.warn("<Home> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -34470,9 +34690,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Modals/ProblemFields.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/ProblemFields.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$1 } = globals;
+    const { console: console_1$2 } = globals;
     const file$7 = "src/Modals/ProblemFields.svelte";
 
     function create_fragment$a(ctx) {
@@ -34688,7 +34908,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div0, anchor);
     			append_dev(div0, p);
     			insert_dev(target, t1, anchor);
@@ -34744,6 +34964,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(div13, button0);
     			append_dev(div13, t23);
     			append_dev(div13, button1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
@@ -34840,9 +35061,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["onChange"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<ProblemFields> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<ProblemFields> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("ProblemFields", $$slots, []);
     	const $$binding_groups = [[]];
 
     	function input0_input_handler() {
@@ -34883,14 +35106,26 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		if ("onChange" in $$props) $$invalidate(3, onChange = $$props.onChange);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { onChange, problem };
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		getClient,
+    		mutate,
+    		apolloClient,
+    		close,
+    		onChange,
+    		problem,
+    		client,
+    		clickHandler
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("onChange" in $$props) $$invalidate(3, onChange = $$props.onChange);
     		if ("problem" in $$props) $$invalidate(0, problem = $$props.problem);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		problem,
@@ -34925,7 +35160,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*onChange*/ ctx[3] === undefined && !("onChange" in props)) {
-    			console_1$1.warn("<ProblemFields> was created without expected prop 'onChange'");
+    			console_1$2.warn("<ProblemFields> was created without expected prop 'onChange'");
     		}
     	}
 
@@ -34938,9 +35173,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Modals/problemModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/problemModal.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$2 } = globals;
+    const { console: console_1$3 } = globals;
     const file$8 = "src/Modals/problemModal.svelte";
 
     function create_fragment$b(ctx) {
@@ -34960,9 +35195,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, p, anchor);
     			append_dev(p, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -35010,20 +35246,33 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["changeCheck"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<ProblemModal> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<ProblemModal> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("ProblemModal", $$slots, []);
 
     	$$self.$set = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { changeCheck };
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		ProblemField: ProblemFields,
+    		open,
+    		changeCheck,
+    		problemCheck,
+    		handleChange,
+    		showSurprise
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [showSurprise, changeCheck];
     }
@@ -35044,7 +35293,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*changeCheck*/ ctx[1] === undefined && !("changeCheck" in props)) {
-    			console_1$2.warn("<ProblemModal> was created without expected prop 'changeCheck'");
+    			console_1$3.warn("<ProblemModal> was created without expected prop 'changeCheck'");
     		}
     	}
 
@@ -35057,16 +35306,214 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Modals/testField.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/testField.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$3 } = globals;
+    const { console: console_1$4 } = globals;
     const file$9 = "src/Modals/testField.svelte";
 
+    function get_each_context$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[15] = list[i];
+    	return child_ctx;
+    }
+
+    // (125:8) {:catch err}
+    function create_catch_block$1(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[14] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error :- ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems*/ 2 && t1_value !== (t1_value = /*err*/ ctx[14] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$1.name,
+    		type: "catch",
+    		source: "(125:8) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (116:8) {:then result}
+    function create_then_block$1(ctx) {
+    	let ol;
+    	let each_value = /*result*/ ctx[13].data.allProblems;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			ol = element("ol");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			add_location(ol, file$9, 116, 10, 3436);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, ol, anchor);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(ol, null);
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems*/ 2) {
+    				each_value = /*result*/ ctx[13].data.allProblems;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(ol, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(ol);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$1.name,
+    		type: "then",
+    		source: "(116:8) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (118:12) {#each result.data.allProblems as prob}
+    function create_each_block$1(ctx) {
+    	let li;
+    	let input;
+    	let input_value_value;
+    	let t0;
+    	let h2;
+    	let t1_value = /*prob*/ ctx[15].problemName + "";
+    	let t1;
+    	let t2;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			input = element("input");
+    			t0 = space();
+    			h2 = element("h2");
+    			t1 = text(t1_value);
+    			t2 = space();
+    			attr_dev(input, "type", "checkbox");
+    			input.value = input_value_value = /*prob*/ ctx[15].id;
+    			attr_dev(input, "name", "Problem");
+    			add_location(input, file$9, 119, 16, 3528);
+    			add_location(h2, file$9, 120, 16, 3601);
+    			add_location(li, file$9, 118, 14, 3507);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, input);
+    			append_dev(li, t0);
+    			append_dev(li, h2);
+    			append_dev(h2, t1);
+    			append_dev(li, t2);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems*/ 2 && input_value_value !== (input_value_value = /*prob*/ ctx[15].id)) {
+    				prop_dev(input, "value", input_value_value);
+    			}
+
+    			if (dirty & /*$Problems*/ 2 && t1_value !== (t1_value = /*prob*/ ctx[15].problemName + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$1.name,
+    		type: "each",
+    		source: "(118:12) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (114:26)            Problems are being loaded...         {:then result}
+    function create_pending_block$1(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Problems are being loaded...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$1.name,
+    		type: "pending",
+    		source: "(114:26)            Problems are being loaded...         {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
     function create_fragment$c(ctx) {
+    	let div11;
     	let div0;
     	let p;
     	let t1;
     	let form;
+    	let div7;
     	let div3;
     	let div1;
     	let label0;
@@ -35094,19 +35541,40 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	let t13;
     	let span2;
     	let t15;
-    	let div7;
-    	let button0;
+    	let div9;
+    	let h1;
     	let t17;
+    	let div8;
+    	let promise;
+    	let t18;
+    	let div10;
+    	let button0;
+    	let t20;
     	let button1;
     	let dispose;
 
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$1,
+    		then: create_then_block$1,
+    		catch: create_catch_block$1,
+    		value: 13,
+    		error: 14
+    	};
+
+    	handle_promise(promise = /*$Problems*/ ctx[1], info);
+
     	const block = {
     		c: function create() {
+    			div11 = element("div");
     			div0 = element("div");
     			p = element("p");
     			p.textContent = "Add New Test";
     			t1 = space();
     			form = element("form");
+    			div7 = element("div");
     			div3 = element("div");
     			div1 = element("div");
     			label0 = element("label");
@@ -35139,98 +35607,116 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			span2 = element("span");
     			span2.textContent = "Hard";
     			t15 = space();
-    			div7 = element("div");
+    			div9 = element("div");
+    			h1 = element("h1");
+    			h1.textContent = "Select problems to be added";
+    			t17 = space();
+    			div8 = element("div");
+    			info.block.c();
+    			t18 = space();
+    			div10 = element("div");
     			button0 = element("button");
     			button0.textContent = "Save";
-    			t17 = space();
+    			t20 = space();
     			button1 = element("button");
     			button1.textContent = "Close";
     			attr_dev(p, "class", "text-2xl font-bold");
-    			add_location(p, file$9, 28, 2, 672);
-    			attr_dev(div0, "class", "flex justify-between items-center pb-3");
-    			add_location(div0, file$9, 27, 0, 617);
+    			add_location(p, file$9, 48, 4, 1012);
+    			attr_dev(div0, "class", "flex  justify-between items-center pb-3 object-center");
+    			add_location(div0, file$9, 47, 2, 940);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$9, 33, 6, 835);
+    			add_location(label0, file$9, 54, 10, 1261);
     			attr_dev(div1, "class", "md:w-1/3");
-    			add_location(div1, file$9, 32, 4, 806);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n        w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n        focus:bg-white focus:border-purple-500");
+    			add_location(div1, file$9, 53, 8, 1228);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n            w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n            focus:bg-white focus:border-purple-500");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Test Name");
-    			add_location(input0, file$9, 40, 6, 1029);
+    			add_location(input0, file$9, 61, 10, 1483);
     			attr_dev(div2, "class", "md:w-2/3");
-    			add_location(div2, file$9, 39, 4, 1000);
+    			add_location(div2, file$9, 60, 8, 1450);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$9, 31, 2, 759);
+    			add_location(div3, file$9, 52, 6, 1177);
     			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-username");
-    			add_location(label1, file$9, 52, 6, 1450);
+    			add_location(label1, file$9, 73, 10, 1952);
     			attr_dev(div4, "class", "md:w-1/3");
-    			add_location(div4, file$9, 51, 4, 1421);
+    			add_location(div4, file$9, 72, 8, 1919);
     			attr_dev(input1, "type", "radio");
     			attr_dev(input1, "class", "form-radio");
     			attr_dev(input1, "name", "difficultyType");
     			input1.__value = "easy";
     			input1.value = input1.__value;
-    			/*$$binding_groups*/ ctx[7][0].push(input1);
-    			add_location(input1, file$9, 60, 8, 1698);
+    			/*$$binding_groups*/ ctx[9][0].push(input1);
+    			add_location(input1, file$9, 81, 12, 2232);
     			attr_dev(span0, "class", "ml-2 text-gray-500");
-    			add_location(span0, file$9, 66, 8, 1867);
+    			add_location(span0, file$9, 87, 12, 2425);
     			attr_dev(label2, "class", "inline-flex items-center");
-    			add_location(label2, file$9, 59, 6, 1649);
+    			add_location(label2, file$9, 80, 10, 2179);
     			attr_dev(input2, "type", "radio");
     			attr_dev(input2, "class", "form-radio");
     			attr_dev(input2, "name", "difficultyType");
     			input2.__value = "medium";
     			input2.value = input2.__value;
-    			/*$$binding_groups*/ ctx[7][0].push(input2);
-    			add_location(input2, file$9, 69, 8, 1987);
+    			/*$$binding_groups*/ ctx[9][0].push(input2);
+    			add_location(input2, file$9, 90, 12, 2557);
     			attr_dev(span1, "class", "ml-2 text-gray-500");
-    			add_location(span1, file$9, 75, 8, 2158);
+    			add_location(span1, file$9, 96, 12, 2752);
     			attr_dev(label3, "class", "inline-flex items-center ml-6");
-    			add_location(label3, file$9, 68, 6, 1933);
+    			add_location(label3, file$9, 89, 10, 2499);
     			attr_dev(input3, "type", "radio");
     			attr_dev(input3, "class", "form-radio");
     			attr_dev(input3, "name", "difficultyType");
     			input3.__value = "hard";
     			input3.value = input3.__value;
-    			/*$$binding_groups*/ ctx[7][0].push(input3);
-    			add_location(input3, file$9, 78, 8, 2280);
+    			/*$$binding_groups*/ ctx[9][0].push(input3);
+    			add_location(input3, file$9, 99, 12, 2886);
     			attr_dev(span2, "class", "ml-2 text-gray-500");
-    			add_location(span2, file$9, 84, 8, 2449);
+    			add_location(span2, file$9, 105, 12, 3079);
     			attr_dev(label4, "class", "inline-flex items-center ml-6");
-    			add_location(label4, file$9, 77, 6, 2226);
+    			add_location(label4, file$9, 98, 10, 2828);
     			attr_dev(div5, "class", "md:w-2/3");
-    			add_location(div5, file$9, 58, 4, 1620);
+    			add_location(div5, file$9, 79, 8, 2146);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$9, 50, 2, 1374);
-    			attr_dev(form, "class", "w-full max-w-md");
-    			add_location(form, file$9, 30, 0, 726);
-    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500 hover:bg-gray-100\n    hover:text-indigo-400 mr-2");
-    			add_location(button0, file$9, 91, 2, 2576);
-    			attr_dev(button1, "class", "modal-closet px-4 bg-indigo-500 p-3 rounded-lg text-white\n    hover:bg-indigo-400");
-    			add_location(button1, file$9, 97, 2, 2748);
-    			attr_dev(div7, "class", "flex justify-end pt-2");
-    			add_location(div7, file$9, 90, 0, 2538);
+    			add_location(div6, file$9, 71, 6, 1868);
+    			attr_dev(div7, "class", "flex-1 box-border formbox svelte-y1xqu3");
+    			add_location(div7, file$9, 51, 4, 1131);
+    			add_location(h1, file$9, 111, 6, 3269);
+    			attr_dev(div8, "class", "problembox svelte-y1xqu3");
+    			add_location(div8, file$9, 112, 6, 3312);
+    			attr_dev(div9, "class", "flex-1 problembox box-border overflow-x-hidden overflow-y-auto svelte-y1xqu3");
+    			add_location(div9, file$9, 110, 4, 3186);
+    			attr_dev(form, "class", "flex flex-row max-w-md box-border mainbox svelte-y1xqu3");
+    			add_location(form, file$9, 50, 2, 1070);
+    			attr_dev(button0, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500\n      hover:bg-gray-100 hover:text-indigo-400 mr-2");
+    			add_location(button0, file$9, 132, 4, 3835);
+    			attr_dev(button1, "class", "modal-closet px-4 bg-indigo-500 p-3 rounded-lg text-white\n      hover:bg-indigo-400");
+    			add_location(button1, file$9, 138, 4, 4019);
+    			attr_dev(div10, "class", "flex justify-end pt-2 buttonbox svelte-y1xqu3");
+    			add_location(div10, file$9, 131, 2, 3785);
+    			attr_dev(div11, "class", "flex-column");
+    			add_location(div11, file$9, 46, 0, 912);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div0, anchor);
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, div11, anchor);
+    			append_dev(div11, div0);
     			append_dev(div0, p);
-    			insert_dev(target, t1, anchor);
-    			insert_dev(target, form, anchor);
-    			append_dev(form, div3);
+    			append_dev(div11, t1);
+    			append_dev(div11, form);
+    			append_dev(form, div7);
+    			append_dev(div7, div3);
     			append_dev(div3, div1);
     			append_dev(div1, label0);
     			append_dev(div3, t3);
     			append_dev(div3, div2);
     			append_dev(div2, input0);
     			set_input_value(input0, /*test*/ ctx[0].testName);
-    			append_dev(form, t4);
-    			append_dev(form, div6);
+    			append_dev(div7, t4);
+    			append_dev(div7, div6);
     			append_dev(div6, div4);
     			append_dev(div4, label1);
     			append_dev(div6, t6);
@@ -35252,22 +35738,33 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			input3.checked = input3.__value === /*test*/ ctx[0].difficultyLevel;
     			append_dev(label4, t13);
     			append_dev(label4, span2);
-    			insert_dev(target, t15, anchor);
-    			insert_dev(target, div7, anchor);
-    			append_dev(div7, button0);
-    			append_dev(div7, t17);
-    			append_dev(div7, button1);
+    			append_dev(form, t15);
+    			append_dev(form, div9);
+    			append_dev(div9, h1);
+    			append_dev(div9, t17);
+    			append_dev(div9, div8);
+    			info.block.m(div8, info.anchor = null);
+    			info.mount = () => div8;
+    			info.anchor = null;
+    			append_dev(div11, t18);
+    			append_dev(div11, div10);
+    			append_dev(div10, button0);
+    			append_dev(div10, t20);
+    			append_dev(div10, button1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
-    				listen_dev(input1, "change", /*input1_change_handler*/ ctx[6]),
-    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[8]),
-    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[9]),
-    				listen_dev(button0, "click", /*clickHandler*/ ctx[2], false, false, false),
-    				listen_dev(button1, "click", /*click_handler*/ ctx[10], false, false, false)
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[7]),
+    				listen_dev(input1, "change", /*input1_change_handler*/ ctx[8]),
+    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[10]),
+    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[11]),
+    				listen_dev(button0, "click", /*clickHandler*/ ctx[4], false, false, false),
+    				listen_dev(button1, "click", /*click_handler*/ ctx[12], false, false, false)
     			];
     		},
-    		p: function update(ctx, [dirty]) {
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
+
     			if (dirty & /*test*/ 1 && input0.value !== /*test*/ ctx[0].testName) {
     				set_input_value(input0, /*test*/ ctx[0].testName);
     			}
@@ -35283,18 +35780,25 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			if (dirty & /*test*/ 1) {
     				input3.checked = input3.__value === /*test*/ ctx[0].difficultyLevel;
     			}
+
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Problems*/ 2 && promise !== (promise = /*$Problems*/ ctx[1]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[13] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
     		},
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div0);
-    			if (detaching) detach_dev(t1);
-    			if (detaching) detach_dev(form);
-    			/*$$binding_groups*/ ctx[7][0].splice(/*$$binding_groups*/ ctx[7][0].indexOf(input1), 1);
-    			/*$$binding_groups*/ ctx[7][0].splice(/*$$binding_groups*/ ctx[7][0].indexOf(input2), 1);
-    			/*$$binding_groups*/ ctx[7][0].splice(/*$$binding_groups*/ ctx[7][0].indexOf(input3), 1);
-    			if (detaching) detach_dev(t15);
-    			if (detaching) detach_dev(div7);
+    			if (detaching) detach_dev(div11);
+    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input1), 1);
+    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input2), 1);
+    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input3), 1);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
     			run_all(dispose);
     		}
     	};
@@ -35311,6 +35815,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     function instance$c($$self, $$props, $$invalidate) {
+    	let $Problems;
     	const { close } = getContext("simple-modal");
     	let { onChange } = $$props;
 
@@ -35321,6 +35826,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	};
 
     	const client = getClient();
+    	const Problems = query(client, { query: apolloClient.getProblems });
+    	validate_store(Problems, "Problems");
+    	component_subscribe($$self, Problems, value => $$invalidate(1, $Problems = value));
 
     	async function clickHandler() {
     		console.log(test);
@@ -35341,9 +35849,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["onChange"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<TestField> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<TestField> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("TestField", $$slots, []);
     	const $$binding_groups = [[]];
 
     	function input0_input_handler() {
@@ -35371,21 +35881,38 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	};
 
     	$$self.$set = $$props => {
-    		if ("onChange" in $$props) $$invalidate(3, onChange = $$props.onChange);
+    		if ("onChange" in $$props) $$invalidate(5, onChange = $$props.onChange);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { onChange, test };
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		getClient,
+    		mutate,
+    		query,
+    		apolloClient,
+    		close,
+    		onChange,
+    		test,
+    		client,
+    		Problems,
+    		clickHandler,
+    		$Problems
+    	});
 
     	$$self.$inject_state = $$props => {
-    		if ("onChange" in $$props) $$invalidate(3, onChange = $$props.onChange);
+    		if ("onChange" in $$props) $$invalidate(5, onChange = $$props.onChange);
     		if ("test" in $$props) $$invalidate(0, test = $$props.test);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [
     		test,
+    		$Problems,
     		close,
+    		Problems,
     		clickHandler,
     		onChange,
     		client,
@@ -35401,7 +35928,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class TestField extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { onChange: 3 });
+    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { onChange: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -35413,8 +35940,8 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*onChange*/ ctx[3] === undefined && !("onChange" in props)) {
-    			console_1$3.warn("<TestField> was created without expected prop 'onChange'");
+    		if (/*onChange*/ ctx[5] === undefined && !("onChange" in props)) {
+    			console_1$4.warn("<TestField> was created without expected prop 'onChange'");
     		}
     	}
 
@@ -35427,7 +35954,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/Modals/testModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/testModal.svelte generated by Svelte v3.20.1 */
     const file$a = "src/Modals/testModal.svelte";
 
     function create_fragment$d(ctx) {
@@ -35447,9 +35974,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, p, anchor);
     			append_dev(p, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -35493,17 +36021,29 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<TestModal> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("TestModal", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { changeCheck };
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		TestField,
+    		open,
+    		changeCheck,
+    		TestCheck,
+    		showSurprise
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [showSurprise, changeCheck];
     }
@@ -35537,13 +36077,14 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/components/navbar.svelte generated by Svelte v3.18.1 */
-
+    /* src/components/navbar.svelte generated by Svelte v3.20.1 */
     const file$b = "src/components/navbar.svelte";
 
     function create_fragment$e(ctx) {
     	let nav;
     	let div1;
+    	let h1;
+    	let t1;
     	let div0;
     	let button;
     	let dispose;
@@ -35552,26 +36093,34 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		c: function create() {
     			nav = element("nav");
     			div1 = element("div");
+    			h1 = element("h1");
+    			h1.textContent = "Welcome...";
+    			t1 = space();
     			div0 = element("div");
     			button = element("button");
     			button.textContent = "Logout";
+    			attr_dev(h1, "class", "welcome svelte-wjt86");
+    			add_location(h1, file$b, 21, 4, 442);
     			attr_dev(button, "id", "btn");
-    			attr_dev(button, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-85b95l");
-    			add_location(button, file$b, 16, 8, 302);
-    			add_location(div0, file$b, 15, 8, 288);
+    			attr_dev(button, "class", "inline-block text-sm px-4 py-2 lg:items-right leading-none border\n        rounded text-white border-white hover:border-transparent\n        hover:text-teal-500 hover:bg-white mt-4 lg:mt-0 svelte-wjt86");
+    			add_location(button, file$b, 23, 6, 495);
+    			add_location(div0, file$b, 22, 4, 483);
     			attr_dev(div1, "class", "w-full block flex-grow lg:items-right");
-    			add_location(div1, file$b, 14, 4, 228);
+    			add_location(div1, file$b, 20, 2, 386);
     			attr_dev(nav, "class", "flex items-center justify-between flex-wrap bg-teal-500 p-6");
-    			add_location(nav, file$b, 13, 0, 150);
+    			add_location(nav, file$b, 18, 0, 309);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, nav, anchor);
     			append_dev(nav, div1);
+    			append_dev(div1, h1);
+    			append_dev(div1, t1);
     			append_dev(div1, div0);
     			append_dev(div0, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", myFunction, false, false, false);
     		},
     		p: noop,
@@ -35598,10 +36147,23 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	location.replace("http://localhost:3000/logout");
     }
 
+    function instance$e($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Navbar> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navbar", $$slots, []);
+    	$$self.$capture_state = () => ({ cookieHandler, myFunction });
+    	return [];
+    }
+
     class Navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$e, safe_not_equal, {});
+    		init(this, options, instance$e, create_fragment$e, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -35612,10 +36174,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Admin.svelte generated by Svelte v3.20.1 */
     const file$c = "src/routes/Admin.svelte";
 
-    function get_each_context$1(ctx, list, i) {
+    function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[9] = list[i];
     	return child_ctx;
@@ -35627,7 +36189,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return child_ctx;
     }
 
-    // (66:12) {:catch err}
+    // (69:12) {:catch err}
     function create_catch_block_1(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[8] + "";
@@ -35655,17 +36217,18 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_catch_block_1.name,
     		type: "catch",
-    		source: "(66:12) {:catch err}",
+    		source: "(69:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (58:12) {:then result}
+    // (61:12) {:then result}
     function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let each_value_1 = /*result*/ ctx[7].data.allTests;
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -35690,6 +36253,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Test*/ 1) {
     				each_value_1 = /*result*/ ctx[7].data.allTests;
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -35721,14 +36285,14 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_then_block_1.name,
     		type: "then",
-    		source: "(58:12) {:then result}",
+    		source: "(61:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (59:14) {#each result.data.allTests as test}
+    // (62:14) {#each result.data.allTests as test}
     function create_each_block_1(ctx) {
     	let li;
     	let a;
@@ -35744,8 +36308,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/test/" + /*test*/ ctx[12].id);
-    			add_location(a, file$c, 60, 18, 1459);
-    			add_location(li, file$c, 59, 16, 1436);
+    			add_location(a, file$c, 63, 18, 1507);
+    			attr_dev(li, "class", "prob svelte-10a91nt");
+    			add_location(li, file$c, 62, 16, 1471);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -35769,14 +36334,14 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(59:14) {#each result.data.allTests as test}",
+    		source: "(62:14) {#each result.data.allTests as test}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (56:26)                Loading...             {:then result}
+    // (59:26)                Loading...             {:then result}
     function create_pending_block_1(ctx) {
     	let t;
 
@@ -35797,14 +36362,14 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_pending_block_1.name,
     		type: "pending",
-    		source: "(56:26)                Loading...             {:then result}",
+    		source: "(59:26)                Loading...             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (72:10) <Modal>
+    // (75:10) <Modal>
     function create_default_slot_1(ctx) {
     	let current;
 
@@ -35840,15 +36405,15 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_default_slot_1.name,
     		type: "slot",
-    		source: "(72:10) <Modal>",
+    		source: "(75:10) <Modal>",
     		ctx
     	});
 
     	return block;
     }
 
-    // (93:12) {:catch err}
-    function create_catch_block$1(ctx) {
+    // (96:12) {:catch err}
+    function create_catch_block$2(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[8] + "";
     	let t1;
@@ -35873,23 +36438,24 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$1.name,
+    		id: create_catch_block$2.name,
     		type: "catch",
-    		source: "(93:12) {:catch err}",
+    		source: "(96:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (85:12) {:then result}
-    function create_then_block$1(ctx) {
+    // (88:12) {:then result}
+    function create_then_block$2(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[7].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
     	}
 
     	const block = {
@@ -35910,15 +36476,16 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problem*/ 2) {
     				each_value = /*result*/ ctx[7].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$1(ctx, each_value, i);
+    					const child_ctx = get_each_context$2(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i] = create_each_block$2(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
@@ -35939,17 +36506,17 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$1.name,
+    		id: create_then_block$2.name,
     		type: "then",
-    		source: "(85:12) {:then result}",
+    		source: "(88:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (86:14) {#each result.data.allProblems as prob}
-    function create_each_block$1(ctx) {
+    // (89:14) {#each result.data.allProblems as prob}
+    function create_each_block$2(ctx) {
     	let li;
     	let a;
     	let t0_value = /*prob*/ ctx[9].problemName + "";
@@ -35964,8 +36531,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[9].id);
-    			add_location(a, file$c, 87, 18, 2281);
-    			add_location(li, file$c, 86, 16, 2258);
+    			add_location(a, file$c, 90, 18, 2342);
+    			attr_dev(li, "class", "prob svelte-10a91nt");
+    			add_location(li, file$c, 89, 16, 2306);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -35987,17 +36555,17 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$1.name,
+    		id: create_each_block$2.name,
     		type: "each",
-    		source: "(86:14) {#each result.data.allProblems as prob}",
+    		source: "(89:14) {#each result.data.allProblems as prob}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (83:29)                Loading...             {:then result}
-    function create_pending_block$1(ctx) {
+    // (86:29)                Loading...             {:then result}
+    function create_pending_block$2(ctx) {
     	let t;
 
     	const block = {
@@ -36015,16 +36583,16 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$1.name,
+    		id: create_pending_block$2.name,
     		type: "pending",
-    		source: "(83:29)                Loading...             {:then result}",
+    		source: "(86:29)                Loading...             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (99:10) <Modal>
+    // (102:10) <Modal>
     function create_default_slot$1(ctx) {
     	let current;
 
@@ -36060,7 +36628,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_default_slot$1.name,
     		type: "slot",
-    		source: "(99:10) <Modal>",
+    		source: "(102:10) <Modal>",
     		ctx
     	});
 
@@ -36120,9 +36688,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$1,
-    		then: create_then_block$1,
-    		catch: create_catch_block$1,
+    		pending: create_pending_block$2,
+    		then: create_then_block$2,
+    		catch: create_catch_block$2,
     		value: 7,
     		error: 8
     	};
@@ -36170,35 +36738,35 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			create_component(modal1.$$.fragment);
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$c, 42, 0, 937);
+    			add_location(link, file$c, 45, 0, 972);
     			attr_dev(div0, "class", "font-bold text-xl mb-2");
-    			add_location(div0, file$c, 53, 10, 1222);
-    			add_location(ol0, file$c, 54, 10, 1285);
+    			add_location(div0, file$c, 56, 10, 1257);
+    			add_location(ol0, file$c, 57, 10, 1320);
     			attr_dev(div1, "class", "px-6 py-4");
-    			add_location(div1, file$c, 52, 8, 1188);
+    			add_location(div1, file$c, 55, 8, 1223);
     			attr_dev(div2, "class", "px-6 py-4");
     			set_style(div2, "margin-right", "5%");
-    			add_location(div2, file$c, 70, 8, 1722);
+    			add_location(div2, file$c, 73, 8, 1770);
     			attr_dev(div3, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div3, file$c, 51, 6, 1123);
+    			add_location(div3, file$c, 54, 6, 1158);
     			attr_dev(div4, "class", "w-1/2 h-12");
-    			add_location(div4, file$c, 50, 4, 1092);
+    			add_location(div4, file$c, 53, 4, 1127);
     			attr_dev(div5, "class", "font-bold text-xl mb-2");
-    			add_location(div5, file$c, 80, 10, 2035);
-    			add_location(ol1, file$c, 81, 10, 2101);
+    			add_location(div5, file$c, 83, 10, 2083);
+    			add_location(ol1, file$c, 84, 10, 2149);
     			attr_dev(div6, "class", "px-6 py-4");
-    			add_location(div6, file$c, 79, 8, 2001);
+    			add_location(div6, file$c, 82, 8, 2049);
     			attr_dev(div7, "class", "px-6 py-4");
     			set_style(div7, "margin-right", "10%");
-    			add_location(div7, file$c, 97, 8, 2550);
+    			add_location(div7, file$c, 100, 8, 2611);
     			attr_dev(div8, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div8, file$c, 78, 6, 1936);
+    			add_location(div8, file$c, 81, 6, 1984);
     			attr_dev(div9, "class", "w-1/2 h-12");
-    			add_location(div9, file$c, 77, 4, 1905);
+    			add_location(div9, file$c, 80, 4, 1953);
     			attr_dev(div10, "id", "blk");
-    			attr_dev(div10, "class", "flex mb-4 svelte-1mmxieh");
-    			add_location(div10, file$c, 49, 2, 1055);
-    			add_location(body, file$c, 45, 0, 1031);
+    			attr_dev(div10, "class", "flex mb-4 svelte-10a91nt");
+    			add_location(div10, file$c, 52, 2, 1090);
+    			add_location(body, file$c, 48, 0, 1066);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36310,7 +36878,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
+    function instance$f($$self, $$props, $$invalidate) {
     	let $Test;
     	let $Problem;
     	const client = getClient();
@@ -36329,14 +36897,32 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		Test.refetch();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	const writable_props = [];
 
-    	$$self.$inject_state = $$props => {
-    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
-    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
-    	};
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Admin> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Admin", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		Modal,
+    		Content: ProblemModal,
+    		TestModal,
+    		Navbar,
+    		client,
+    		Test,
+    		Problem,
+    		handleProblemAdd,
+    		handleTestAdd,
+    		$Test,
+    		$Problem
+    	});
 
     	return [$Test, $Problem, Test, Problem, handleProblemAdd, handleTestAdd];
     }
@@ -36344,7 +36930,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class Admin extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$f, safe_not_equal, {});
+    		init(this, options, instance$f, create_fragment$f, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -36355,7 +36941,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/routes/Login.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Login.svelte generated by Svelte v3.20.1 */
 
     const file$d = "src/routes/Login.svelte";
 
@@ -36405,7 +36991,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, nav, anchor);
@@ -36415,6 +37001,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			insert_dev(target, t2, anchor);
     			insert_dev(target, div2, anchor);
     			append_dev(div2, p);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", myFunction$1, false, false, false);
     		},
     		p: noop,
@@ -36445,10 +37032,23 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	location.replace("http://localhost:3000/auth/google");
     }
 
+    function instance$g($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Login> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Login", $$slots, []);
+    	$$self.$capture_state = () => ({ myFunction: myFunction$1 });
+    	return [];
+    }
+
     class Login extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$g, safe_not_equal, {});
+    		init(this, options, instance$g, create_fragment$g, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -36459,13 +37059,13 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/routes/Problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Problems.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$4 } = globals;
+    const { console: console_1$5 } = globals;
     const file$e = "src/routes/Problems.svelte";
 
     // (76:0) {:catch err}
-    function create_catch_block$2(ctx) {
+    function create_catch_block$3(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[5] + "";
     	let t1;
@@ -36490,7 +37090,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$2.name,
+    		id: create_catch_block$3.name,
     		type: "catch",
     		source: "(76:0) {:catch err}",
     		ctx
@@ -36500,7 +37100,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (44:0) {:then result}
-    function create_then_block$2(ctx) {
+    function create_then_block$3(ctx) {
     	let div6;
     	let div5;
     	let div3;
@@ -36628,7 +37228,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$2.name,
+    		id: create_then_block$3.name,
     		type: "then",
     		source: "(44:0) {:then result}",
     		ctx
@@ -36638,7 +37238,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (42:17)  Loading... {:then result}
-    function create_pending_block$2(ctx) {
+    function create_pending_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -36656,7 +37256,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$2.name,
+    		id: create_pending_block$3.name,
     		type: "pending",
     		source: "(42:17)  Loading... {:then result}",
     		ctx
@@ -36678,9 +37278,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$2,
-    		then: create_then_block$2,
-    		catch: create_catch_block$2,
+    		pending: create_pending_block$3,
+    		then: create_then_block$3,
+    		catch: create_catch_block$3,
     		value: 4,
     		error: 5
     	};
@@ -36755,7 +37355,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$h($$self, $$props, $$invalidate) {
     	let $problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -36771,21 +37371,34 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<Problems> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<Problems> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problems", $$slots, []);
 
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $problem };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		Navbar,
+    		currentRoute,
+    		client,
+    		problem,
+    		$problem
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
-    		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [$problem, problem, currentRoute];
     }
@@ -36793,7 +37406,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class Problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$h, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$h, create_fragment$h, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -36806,7 +37419,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
-    			console_1$4.warn("<Problems> was created without expected prop 'currentRoute'");
+    			console_1$5.warn("<Problems> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -36819,12 +37432,12 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/routes/Tests.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Tests.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$5 } = globals;
+    const { console: console_1$6 } = globals;
     const file$f = "src/routes/Tests.svelte";
 
-    function get_each_context$2(ctx, list, i) {
+    function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[11] = list[i];
     	return child_ctx;
@@ -36880,7 +37493,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (44:4) {:then result}
-    function create_then_block$3(ctx) {
+    function create_then_block$4(ctx) {
     	let t0;
     	let div16;
     	let div8;
@@ -36933,6 +37546,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	let current;
     	const navbar = new Navbar({ $$inline: true });
     	let each_value_2 = /*result*/ ctx[9].data.testById.problems;
+    	validate_each_argument(each_value_2);
     	let each_blocks_1 = [];
 
     	for (let i = 0; i < each_value_2.length; i += 1) {
@@ -36940,6 +37554,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
 
     	let each_value_1 = /*problems*/ ctx[0];
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -36952,7 +37567,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		token: null,
     		pending: create_pending_block_1$1,
     		then: create_then_block_1$1,
-    		catch: create_catch_block$3,
+    		catch: create_catch_block$4,
     		value: 9,
     		error: 10
     	};
@@ -37148,6 +37763,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     			if (dirty & /*$test*/ 2) {
     				each_value_2 = /*result*/ ctx[9].data.testById.problems;
+    				validate_each_argument(each_value_2);
     				let i;
 
     				for (i = 0; i < each_value_2.length; i += 1) {
@@ -37171,6 +37787,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     			if (dirty & /*problems*/ 1) {
     				each_value_1 = /*problems*/ ctx[0];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -37229,7 +37846,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$3.name,
+    		id: create_then_block$4.name,
     		type: "then",
     		source: "(44:4) {:then result}",
     		ctx
@@ -37336,7 +37953,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (138:18) {:catch err}
-    function create_catch_block$3(ctx) {
+    function create_catch_block$4(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[10] + "";
     	let t1;
@@ -37361,7 +37978,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$3.name,
+    		id: create_catch_block$4.name,
     		type: "catch",
     		source: "(138:18) {:catch err}",
     		ctx
@@ -37374,10 +37991,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     function create_then_block_1$1(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[9].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$3(get_each_context$3(ctx, each_value, i));
     	}
 
     	const block = {
@@ -37398,15 +38016,16 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problem, problems*/ 5) {
     				each_value = /*result*/ ctx[9].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$2(ctx, each_value, i);
+    					const child_ctx = get_each_context$3(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$2(child_ctx);
+    						each_blocks[i] = create_each_block$3(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
@@ -37437,7 +38056,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (125:20) {#each result.data.allProblems as prob}
-    function create_each_block$2(ctx) {
+    function create_each_block$3(ctx) {
     	let label;
     	let li;
     	let a;
@@ -37469,7 +38088,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			add_location(li, file$f, 126, 24, 3998);
     			add_location(label, file$f, 125, 22, 3966);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, label, anchor);
     			append_dev(label, li);
     			append_dev(li, a);
@@ -37478,6 +38097,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(a, t0);
     			append_dev(a, t1);
     			append_dev(label, t2);
+    			if (remount) dispose();
     			dispose = listen_dev(input, "change", /*input_change_handler*/ ctx[7]);
     		},
     		p: function update(ctx, dirty) {
@@ -37506,7 +38126,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$2.name,
+    		id: create_each_block$3.name,
     		type: "each",
     		source: "(125:20) {#each result.data.allProblems as prob}",
     		ctx
@@ -37544,7 +38164,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (42:18)        Loading ...     {:then result}
-    function create_pending_block$3(ctx) {
+    function create_pending_block$4(ctx) {
     	let t;
 
     	const block = {
@@ -37564,7 +38184,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$3.name,
+    		id: create_pending_block$4.name,
     		type: "pending",
     		source: "(42:18)        Loading ...     {:then result}",
     		ctx
@@ -37585,8 +38205,8 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$3,
-    		then: create_then_block$3,
+    		pending: create_pending_block$4,
+    		then: create_then_block$4,
     		catch: create_catch_block_1$1,
     		value: 9,
     		error: 10,
@@ -37665,7 +38285,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$i($$self, $$props, $$invalidate) {
     	let $test;
     	let $Problem;
     	let { currentRoute } = $$props;
@@ -37686,9 +38306,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<Tests> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<Tests> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tests", $$slots, []);
     	const $$binding_groups = [[]];
 
     	function input_change_handler() {
@@ -37700,23 +38322,29 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			Problem,
-    			problems,
-    			$test,
-    			$Problem
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		Navbar,
+    		currentRoute,
+    		client,
+    		test,
+    		Problem,
+    		problems,
+    		$test,
+    		$Problem
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     		if ("Problem" in $$props) $$invalidate(4, Problem = $$props.Problem);
     		if ("problems" in $$props) $$invalidate(0, problems = $$props.problems);
-    		if ("$test" in $$props) test.set($test = $$props.$test);
-    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		problems,
@@ -37734,7 +38362,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$i, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$i, create_fragment$i, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -37747,7 +38375,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
-    			console_1$5.warn("<Tests> was created without expected prop 'currentRoute'");
+    			console_1$6.warn("<Tests> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -37760,13 +38388,13 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    /* src/routes/send_test.svelte generated by Svelte v3.18.1 */
+    /* src/routes/send_test.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$6 } = globals;
+    const { console: console_1$7 } = globals;
     const file$g = "src/routes/send_test.svelte";
 
     // (22:0) {:catch err}
-    function create_catch_block$4(ctx) {
+    function create_catch_block$5(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
     	let t1;
@@ -37791,7 +38419,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$4.name,
+    		id: create_catch_block$5.name,
     		type: "catch",
     		source: "(22:0) {:catch err}",
     		ctx
@@ -37801,7 +38429,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (16:0) {:then result}
-    function create_then_block$4(ctx) {
+    function create_then_block$5(ctx) {
     	let input;
     	let input_value_value;
 
@@ -37829,7 +38457,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$4.name,
+    		id: create_then_block$5.name,
     		type: "then",
     		source: "(16:0) {:then result}",
     		ctx
@@ -37839,7 +38467,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }
 
     // (14:15)    Loading... {:then result}
-    function create_pending_block$4(ctx) {
+    function create_pending_block$5(ctx) {
     	let t;
 
     	const block = {
@@ -37857,7 +38485,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$4.name,
+    		id: create_pending_block$5.name,
     		type: "pending",
     		source: "(14:15)    Loading... {:then result}",
     		ctx
@@ -37880,9 +38508,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$4,
-    		then: create_then_block$4,
-    		catch: create_catch_block$4,
+    		pending: create_pending_block$5,
+    		then: create_then_block$5,
+    		catch: create_catch_block$5,
     		value: 5,
     		error: 6
     	};
@@ -37911,7 +38539,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, h1, anchor);
     			insert_dev(target, t1, anchor);
     			info.block.m(target, info.anchor = anchor);
@@ -37921,6 +38549,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			insert_dev(target, input, anchor);
     			insert_dev(target, t3, anchor);
     			insert_dev(target, button, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*click_handler*/ ctx[4], false, false, false);
     		},
     		p: function update(new_ctx, [dirty]) {
@@ -37960,7 +38589,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$h($$self, $$props, $$invalidate) {
+    function instance$j($$self, $$props, $$invalidate) {
     	let $token;
     	let { currentRoute } = $$props;
     	const client = getClient();
@@ -37975,8 +38604,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<Send_test> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<Send_test> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Send_test", $$slots, []);
 
     	const click_handler = async () => {
     		let email = document.getElementById("email").value;
@@ -37997,14 +38629,24 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $token };
-    	};
+    	$$self.$capture_state = () => ({
+    		currentRoute,
+    		getClient,
+    		query,
+    		mutate,
+    		apolloClient,
+    		client,
+    		token,
+    		$token
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
-    		if ("$token" in $$props) token.set($token = $$props.$token);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [$token, client, token, currentRoute, click_handler];
     }
@@ -38012,7 +38654,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$h, create_fragment$j, safe_not_equal, { currentRoute: 3 });
+    		init(this, options, instance$j, create_fragment$j, safe_not_equal, { currentRoute: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -38025,7 +38667,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[3] === undefined && !("currentRoute" in props)) {
-    			console_1$6.warn("<Send_test> was created without expected prop 'currentRoute'");
+    			console_1$7.warn("<Send_test> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -38038,15 +38680,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
-    function notAdmin(){
-      return document.cookie ? false : true;
-    }
-
     const routes = [
       {
         name: '/',
         component: Login,
-        onlyIf: { guard: notAdmin,redirect: '/admin' }
+        // onlyIf: { guard: notAdmin,redirect: '/admin' }
       },
       {
         name: '/admin',
@@ -38695,7 +39333,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     var zenObservable = Observable_1.Observable;
 
     var Observable = zenObservable;
-    //# sourceMappingURL=bundle.esm.js.map
 
     function validateOperation(operation) {
         var OPERATION_FIELDS = [
@@ -38850,7 +39487,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     function execute(link, operation) {
         return (link.request(createOperation(operation.context, transformOperation(validateOperation(operation)))) || Observable.of());
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     function symbolObservablePonyfill(root) {
     	var result;
@@ -40985,7 +41621,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ApolloClient;
     }());
-    //# sourceMappingURL=bundle.esm.js.map
 
     function queryFromPojo(obj) {
         var op = {
@@ -41153,7 +41788,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ApolloCache;
     }());
-    //# sourceMappingURL=bundle.esm.js.map
 
     // This currentContext variable will only be used if the makeSlotClass
     // function is called, which happens only if this is the first copy of the
@@ -41293,7 +41927,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }();
 
     var bind = Slot.bind, noContext = Slot.noContext;
-    //# sourceMappingURL=context.esm.js.map
 
     function defaultDispose() { }
     var Cache = /** @class */ (function () {
@@ -41768,7 +42401,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return optimistic;
     }
-    //# sourceMappingURL=bundle.esm.js.map
 
     var haveWarned = false;
     function shouldWarn() {
@@ -42697,7 +43329,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return InMemoryCache;
     }(ApolloCache));
-    //# sourceMappingURL=bundle.esm.js.map
 
     /**
      * Converts an AST into a string, using one set of reasonable
@@ -43116,7 +43747,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
             return fallbackURI || '/graphql';
         }
     };
-    //# sourceMappingURL=bundle.esm.js.map
 
     var createHttpLink = function (linkOptions) {
         if (linkOptions === void 0) { linkOptions = {}; }
@@ -43256,7 +43886,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         }
         return HttpLink;
     }(ApolloLink));
-    //# sourceMappingURL=bundle.esm.js.map
 
     function onError(errorHandler) {
         return new ApolloLink(function (operation, forward) {
@@ -43336,7 +43965,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ErrorLink;
     }(ApolloLink));
-    //# sourceMappingURL=bundle.esm.js.map
 
     var PRESET_CONFIG_KEYS = [
         'request',
@@ -43447,15 +44075,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         }
         return DefaultClient;
     }(ApolloClient));
-    //# sourceMappingURL=bundle.esm.js.map
 
-    /* src/App.svelte generated by Svelte v3.18.1 */
-
-    const { console: console_1$7 } = globals;
+    /* src/App.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$k(ctx) {
     	let current;
-    	let dispose;
 
     	const router = new src_6({
     			props: {
@@ -43475,7 +44099,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		m: function mount(target, anchor) {
     			mount_component(router, target, anchor);
     			current = true;
-    			dispose = listen_dev(window, "keydown", /*keydown_handler*/ ctx[4], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
     			const router_changes = {};
@@ -43493,7 +44116,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		},
     		d: function destroy(detaching) {
     			destroy_component(router, detaching);
-    			dispose();
     		}
     	};
 
@@ -43508,79 +44130,52 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$i($$self, $$props, $$invalidate) {
-    	let $currentTab;
-    	let $dataStore;
-    	validate_store(currentTab, "currentTab");
-    	component_subscribe($$self, currentTab, $$value => $$invalidate(1, $currentTab = $$value));
-    	validate_store(dataStore, "dataStore");
-    	component_subscribe($$self, dataStore, $$value => $$invalidate(2, $dataStore = $$value));
+    function instance$k($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<App> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<App> was created with unknown prop '${key}'`);
     	});
 
-    	const keydown_handler = evt => {
-    		if (evt.ctrlKey && evt.key === "s" && $currentTab.changeData) {
-    			console.log(evt);
-    			evt.preventDefault();
-    			dataStore.changeDataUpdate($currentTab.id);
-    		} else if (evt.ctrlKey && evt.altKey && evt.key === "p" && $currentTab.changeData === false) {
-    			evt.preventDefault();
-    			dataStore.changeDataUpdate($currentTab.id);
-    		} else if (evt.ctrlKey && evt.key === "p" && evt.altKey === false) {
-    			evt.preventDefault();
-    			dataStore.add();
-    		} else if (evt.ctrlKey && evt.altKey && evt.key === "c") {
-    			const id = $currentTab.id;
-
-    			if ($dataStore.length === 1) {
-    				return;
-    			}
-
-    			$dataStore.some((tab, index) => {
-    				if (tab.id !== $currentTab.id) {
-    					return false;
-    				}
-
-    				if (index === 0) {
-    					dataStore.activate($dataStore[index + 1].id);
-    					return true;
-    				}
-
-    				dataStore.activate($dataStore[index - 1].id);
-    				return true;
-    			});
-
-    			dataStore.deleteTab(id);
-    		}
-    	};
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("App", $$slots, []);
 
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $currentTab, $dataStore };
-    	};
+    	$$self.$capture_state = () => ({
+    		Router: src_6,
+    		routes,
+    		onMount,
+    		apolloClient,
+    		getClient,
+    		query,
+    		ApolloClient: DefaultClient,
+    		setClient,
+    		gql: src$1,
+    		client,
+    		currentRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
     	};
 
-    	return [currentRoute, $currentTab, $dataStore, client, keydown_handler];
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [currentRoute];
     }
 
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$k, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$k, create_fragment$k, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -43593,7 +44188,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$7.warn("<App> was created without expected prop 'currentRoute'");
+    			console.warn("<App> was created without expected prop 'currentRoute'");
     		}
     	}
 

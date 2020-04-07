@@ -27,7 +27,7 @@
   }
 </script>
 
-<svelte:window
+<!-- <svelte:window
   on:keydown={evt => {
     if (evt.ctrlKey && evt.key === 's' && $currentTab.changeData) {
       console.log(evt);
@@ -57,7 +57,7 @@
       });
       dataStore.deleteTab(id);
     }
-  }} />
+  }} /> -->
 {#if cookieHandler.getCookie('loggedIn') !== 'true'}
   <div>
     <Modal>

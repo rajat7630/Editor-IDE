@@ -4,7 +4,7 @@
   const { open } = getContext("simple-modal");
 
   const showSurprise = () => {
-    open(UserModal, {}, { closeOnEsc: false, closeOnOuterClick: false });
+    open(UserModal, {}, { closeOnEsc: false, closeOnOuterClick: false ,closeButton: false,});
   };
   showSurprise();
 </script>

@@ -21,7 +21,6 @@ let mailOptions = {
   text: ''
 };
 async function addNewProblem(problem) {
-  console.log(problem.problemName);
   const res = await Problem.query().insert({
     problemName: problem.problemName,
     description: problem.description,
@@ -166,21 +165,18 @@ async function testReducer(test) {
 async function getAllProblems() {
   const res = await Problem.query();
   return res.map((problem) => {
-    console.log(problemReducer(problem));
     return problemReducer(problem);
   });
 }
 
 async function getProblemById(id) {
   const res = await Problem.query().findById(id);
-  console.log(res);
   return problemReducer(res);
 }
 
 async function getAllTests() {
   const res = await Test.query();
   return res.map((test) => {
-    console.log(testReducer(test));
     return testReducer(test);
   });
 }
@@ -194,7 +190,6 @@ async function getTestsByAuthor(email) {
 
 async function getTestById(id) {
   const res = await Test.query().where('id', id);
-  console.log(res);
   return testReducer(res[0]);
 }
 
@@ -209,12 +204,10 @@ function getToken(id) {
   const token = jwt.sign({ testId: id }, 'helloo', {
     expiresIn: 60 * 60
   });
-  console.log(token);
   return { token: token };
 }
 
 function getTestByToken(token) {
-  console.log(token);
   const decode = jwt.decode(token);
   console.log(decode);
   return getTestById(decode.testId)

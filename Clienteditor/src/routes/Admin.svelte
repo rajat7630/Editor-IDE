@@ -38,6 +38,9 @@
   #btn {
     float: right;
   }
+  .prob{
+    list-style: none;
+  }
 </style>
 
 <link
@@ -57,7 +60,7 @@
               Loading...
             {:then result}
               {#each result.data.allTests as test}
-                <li>
+                <li class="prob">
                   <a href="http://localhost:5000/test/{test.id}">
                     {test.testName}
                   </a>
@@ -84,7 +87,7 @@
               Loading...
             {:then result}
               {#each result.data.allProblems as prob}
-                <li>
+                <li class="prob">
                   <a href="http://localhost:5000/problem/{prob.id}">
                     {prob.problemName}
                   </a>
