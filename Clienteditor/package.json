@@ -26,7 +26,7 @@
     "cors": "^2.8.5",
     "graphql": "^14.6.0",
     "graphql-tag": "^2.10.3",
-    "jsonwebtoken": "^8.5.1",
+    "jsonwebtoken": "^9.0.0",
     "jwt-simple": "^0.5.6",
     "sirv-cli": "^0.4.4",
     "svelte-apollo": "^0.3.0",
